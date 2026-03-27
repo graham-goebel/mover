@@ -18,8 +18,25 @@
 	loadOrderStep.subscribe((v) => step = v);
 	inventory.subscribe((v) => items = v);
 
+	const liveResult = $derived.by(() => {
+		if (!result) return null;
+		const itemMap = new Map(items.map(i => [i.id, i]));
+		return {
+			...result,
+			placed: result.placed
+				.filter(p => itemMap.has(p.item.id))
+				.map(p => ({
+					...p,
+					item: itemMap.get(p.item.id)!
+				})),
+			unplaced: result.unplaced
+				.map(u => itemMap.get(u.id) ?? u)
+				.filter(Boolean)
+		} as PackResult;
+	});
+
 	const selectedPacked = $derived(
-		result?.placed.find(p => p.item.id === selectedItemId) ?? null
+		liveResult?.placed.find(p => p.item.id === selectedItemId) ?? null
 	);
 
 	function shapeLabel(shape: string | undefined): string {
@@ -129,8 +146,8 @@
 					<h3 class="section-label">Inventory ({items.length})</h3>
 					<div class="item-list">
 						{#each items as item (item.id)}
-							{@const packed = result?.placed.find(p => p.item.id === item.id)}
-							{@const unplaced = result?.unplaced.find(u => u.id === item.id)}
+						{@const packed = liveResult?.placed.find(p => p.item.id === item.id)}
+						{@const unplaced = liveResult?.unplaced.find(u => u.id === item.id)}
 							<button
 								class="item-row"
 								class:packed={!!packed}
@@ -171,7 +188,7 @@
 		<div class="scene-area">
 			<TrailerScene
 				trailer={currentTrailer}
-				packedItems={result?.placed ?? []}
+				packedItems={liveResult?.placed ?? []}
 				loadStep={step}
 				{selectedItemId}
 				onSelectItem={(id) => selectedItemId = id}
