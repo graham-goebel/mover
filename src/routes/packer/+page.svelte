@@ -2,6 +2,7 @@
 	import type { PackedItem, TrailerPreset, PackResult, InventoryItem } from '$lib/types';
 	import { trailer, packResult, loadOrderStep } from '$lib/stores/trailer';
 	import { inventory } from '$lib/stores/inventory';
+	import { SHAPE_OPTIONS } from '$lib/utils/shapes';
 	import PackControls from '$lib/components/PackControls.svelte';
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
 
@@ -16,6 +17,18 @@
 	packResult.subscribe((v) => result = v);
 	loadOrderStep.subscribe((v) => step = v);
 	inventory.subscribe((v) => items = v);
+
+	const selectedPacked = $derived(
+		result?.placed.find(p => p.item.id === selectedItemId) ?? null
+	);
+
+	function shapeLabel(shape: string | undefined): string {
+		return SHAPE_OPTIONS.find(s => s.value === shape)?.label ?? 'Box';
+	}
+
+	function shapeIcon(shape: string | undefined): string {
+		return SHAPE_OPTIONS.find(s => s.value === shape)?.icon ?? '📦';
+	}
 </script>
 
 <svelte:head>
@@ -33,6 +46,83 @@
 			<div class="controls-panel">
 				<PackControls />
 			</div>
+
+			{#if selectedPacked}
+				{@const item = selectedPacked.item}
+				<div class="detail-card">
+					<div class="detail-card-header">
+						<div
+							class="detail-color-dot"
+							style:background={selectedPacked.color}
+						></div>
+						<h3 class="detail-card-name">{item.name}</h3>
+						<button
+							class="detail-close"
+							onclick={() => selectedItemId = null}
+							aria-label="Close detail"
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+
+					{#if item.photo}
+						<div class="detail-photo">
+							<img src={item.photo} alt={item.name} />
+						</div>
+					{/if}
+
+					<div class="detail-meta">
+						<div class="meta-row">
+							<span class="meta-label">Dimensions</span>
+							<span class="meta-value">{item.dimensions.l}″ × {item.dimensions.w}″ × {item.dimensions.h}″</span>
+						</div>
+						<div class="meta-row">
+							<span class="meta-label">Packed as</span>
+							<span class="meta-value">{selectedPacked.rotation.l}″ × {selectedPacked.rotation.w}″ × {selectedPacked.rotation.h}″</span>
+						</div>
+						{#if item.weight}
+							<div class="meta-row">
+								<span class="meta-label">Weight</span>
+								<span class="meta-value">{item.weight} lbs</span>
+							</div>
+						{/if}
+						<div class="meta-row">
+							<span class="meta-label">Shape</span>
+							<span class="meta-value">{shapeIcon(item.shape)} {shapeLabel(item.shape)}</span>
+						</div>
+					</div>
+
+					<div class="detail-badges">
+						{#if item.fragile}
+							<span class="badge badge-warn">⚠️ Fragile</span>
+						{/if}
+						{#if !item.stackable}
+							<span class="badge badge-warn">🚫 No Stack</span>
+						{/if}
+						{#if item.stackable}
+							<span class="badge badge-ok">✓ Stackable</span>
+						{/if}
+					</div>
+
+					{#if item.contents.length > 0}
+						<div class="detail-section">
+							<span class="detail-section-label">Contents ({item.contents.length})</span>
+							<ul class="contents-list">
+								{#each item.contents as content}
+									<li>{content}</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					{#if item.notes}
+						<div class="detail-section">
+							<span class="detail-section-label">Notes</span>
+							<p class="detail-notes">{item.notes}</p>
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			{#if items.length > 0}
 				<div class="inventory-summary">
@@ -99,6 +189,79 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- Mobile detail drawer -->
+		{#if selectedPacked}
+			{@const item = selectedPacked.item}
+			<div class="mobile-detail">
+				<div class="detail-card">
+					<div class="detail-card-header">
+						<div class="detail-color-dot" style:background={selectedPacked.color}></div>
+						<h3 class="detail-card-name">{item.name}</h3>
+						<button class="detail-close" onclick={() => selectedItemId = null} aria-label="Close detail">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+
+					{#if item.photo}
+						<div class="detail-photo">
+							<img src={item.photo} alt={item.name} />
+						</div>
+					{/if}
+
+					<div class="detail-meta">
+						<div class="meta-row">
+							<span class="meta-label">Dimensions</span>
+							<span class="meta-value">{item.dimensions.l}″ × {item.dimensions.w}″ × {item.dimensions.h}″</span>
+						</div>
+						<div class="meta-row">
+							<span class="meta-label">Packed as</span>
+							<span class="meta-value">{selectedPacked.rotation.l}″ × {selectedPacked.rotation.w}″ × {selectedPacked.rotation.h}″</span>
+						</div>
+						{#if item.weight}
+							<div class="meta-row">
+								<span class="meta-label">Weight</span>
+								<span class="meta-value">{item.weight} lbs</span>
+							</div>
+						{/if}
+						<div class="meta-row">
+							<span class="meta-label">Shape</span>
+							<span class="meta-value">{shapeIcon(item.shape)} {shapeLabel(item.shape)}</span>
+						</div>
+					</div>
+
+					<div class="detail-badges">
+						{#if item.fragile}
+							<span class="badge badge-warn">⚠️ Fragile</span>
+						{/if}
+						{#if !item.stackable}
+							<span class="badge badge-warn">🚫 No Stack</span>
+						{/if}
+						{#if item.stackable}
+							<span class="badge badge-ok">✓ Stackable</span>
+						{/if}
+					</div>
+
+					{#if item.contents.length > 0}
+						<div class="detail-section">
+							<span class="detail-section-label">Contents ({item.contents.length})</span>
+							<ul class="contents-list">
+								{#each item.contents as content}
+									<li>{content}</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					{#if item.notes}
+						<div class="detail-section">
+							<span class="detail-section-label">Notes</span>
+							<p class="detail-notes">{item.notes}</p>
+						</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
 	</div>
 </div>
 
@@ -178,6 +341,147 @@
 		background: var(--color-bg);
 	}
 
+	/* Selected item detail card */
+	.detail-card {
+		padding: 16px;
+		border-top: 1px solid var(--color-border);
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.detail-card-header {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.detail-color-dot {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.detail-card-name {
+		flex: 1;
+		font-size: 16px;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.detail-close {
+		padding: 4px;
+		color: var(--color-text-muted);
+		border-radius: 4px;
+		transition: color 0.15s;
+		flex-shrink: 0;
+	}
+
+	.detail-close:hover {
+		color: var(--color-text);
+	}
+
+	.detail-photo {
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+		max-height: 160px;
+	}
+
+	.detail-photo img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.detail-meta {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.meta-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-size: 13px;
+	}
+
+	.meta-label {
+		color: var(--color-text-muted);
+	}
+
+	.meta-value {
+		font-weight: 500;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.detail-badges {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+
+	.badge {
+		font-size: 11px;
+		font-weight: 600;
+		padding: 3px 8px;
+		border-radius: 4px;
+	}
+
+	.badge-warn {
+		background: var(--color-warning-soft);
+		color: var(--color-warning);
+	}
+
+	.badge-ok {
+		background: var(--color-success-soft);
+		color: var(--color-success);
+	}
+
+	.detail-section {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.detail-section-label {
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.contents-list {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.contents-list li {
+		font-size: 13px;
+		padding: 6px 10px;
+		background: var(--color-bg-card);
+		border-radius: var(--radius-sm);
+	}
+
+	.detail-notes {
+		font-size: 13px;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		padding: 8px 10px;
+		background: var(--color-bg-card);
+		border-radius: var(--radius-sm);
+		margin: 0;
+	}
+
 	/* Inventory sidebar list */
 	.inventory-summary {
 		padding: 16px;
@@ -248,8 +552,20 @@
 		flex-shrink: 0;
 	}
 
+	/* Mobile detail drawer (slides up from bottom of scene) */
+	.mobile-detail {
+		max-height: 50vh;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		background: var(--color-bg);
+		border-top: 1px solid var(--color-border);
+	}
+
 	/* ---- Desktop: side-by-side ---- */
 	@media (min-width: 768px) {
+		.mobile-detail {
+			display: none;
+		}
 		.packer-page {
 			flex-direction: row;
 		}
