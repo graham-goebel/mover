@@ -219,38 +219,6 @@
 						{/if}
 					</div>
 
-					{#if otherPacked.length > 0}
-						<div class="detail-section">
-							<span class="detail-section-label">Move next to</span>
-							<div class="snap-targets">
-								{#each otherPacked as target (target.item.id)}
-									<div class="snap-target">
-										<span class="snap-target-name" style:border-left="3px solid {target.color}">
-											{target.item.name}
-										</span>
-										<div class="snap-btns">
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'left')} title="Left of">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-											</button>
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'right')} title="Right of">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-											</button>
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'behind')} title="Behind">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
-											</button>
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'front')} title="In front">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-											</button>
-											<button class="snap-btn snap-above" onclick={() => snapItem(target.item.id, 'above')} title="On top">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-											</button>
-										</div>
-									</div>
-								{/each}
-							</div>
-						</div>
-					{/if}
-
 					{#if item.contents.length > 0}
 						<div class="detail-section">
 							<span class="detail-section-label">Contents ({item.contents.length})</span>
@@ -272,57 +240,62 @@
 			{/if}
 
 			{#if items.length > 0}
-				<div class="inventory-summary">
-					<div class="inv-header">
-						<h3 class="section-label">Inventory ({items.length})</h3>
-						{#if packedIds.size > 0 && packedIds.size < items.length}
-							<button class="add-all-btn" onclick={() => { packedIds = new Set(items.map(i => i.id)); repack(); }}>Add all</button>
-						{:else if packedIds.size === 0 && items.length > 0}
-							<button class="add-all-btn" onclick={() => { packedIds = new Set(items.map(i => i.id)); repack(); }}>Add all</button>
-						{:else if packedIds.size === items.length}
-							<button class="add-all-btn" onclick={() => { packedIds = new Set(); packResult.set(null); }}>Clear</button>
-						{/if}
-					</div>
-					<div class="item-list">
-						{#each items as item (item.id)}
-						{@const packed = liveResult?.placed.find(p => p.item.id === item.id)}
-						{@const unplaced = liveResult?.unplaced.find(u => u.id === item.id)}
-						{@const inTrailer = packedIds.has(item.id)}
-							<div
-								class="item-row"
-								class:packed={!!packed}
-								class:unplaced={!!unplaced}
-								class:selected={selectedItemId === item.id}
-								role="button"
-								tabindex="0"
-								onclick={() => handleItemClick(item.id)}
-								onkeydown={(e) => { if (e.key === 'Enter') handleItemClick(item.id); }}
-							>
-								<span
-									class="item-dot"
-									style:background={packed?.color ?? (unplaced ? 'var(--color-warning)' : 'var(--color-border)')}
-								></span>
-								<span class="item-name">{item.name}</span>
-								<span class="item-dims">
-									{item.dimensions.l}×{item.dimensions.w}×{item.dimensions.h}″
-								</span>
-								{#if inTrailer}
-									<button
-										class="item-remove"
-										onclick={(e) => { e.stopPropagation(); removeItem(item.id); }}
-										aria-label="Remove from trailer"
-									>
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-									</button>
-								{:else}
-									<span class="item-add-hint">
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+				<details class="accordion" open>
+					<summary class="accordion-trigger">
+						<span class="section-label">Inventory ({items.length})</span>
+						<span class="accordion-hint">{packedIds.size} in trailer</span>
+						<svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+					</summary>
+					<div class="accordion-body">
+						<div class="inv-actions">
+							{#if packedIds.size < items.length}
+								<button class="add-all-btn" onclick={() => { packedIds = new Set(items.map(i => i.id)); repack(); }}>Add all</button>
+							{/if}
+							{#if packedIds.size > 0}
+								<button class="add-all-btn" onclick={() => { packedIds = new Set(); packResult.set(null); }}>Clear</button>
+							{/if}
+						</div>
+						<div class="item-list">
+							{#each items as item (item.id)}
+							{@const packed = liveResult?.placed.find(p => p.item.id === item.id)}
+							{@const unplaced = liveResult?.unplaced.find(u => u.id === item.id)}
+							{@const inTrailer = packedIds.has(item.id)}
+								<div
+									class="item-row"
+									class:packed={!!packed}
+									class:unplaced={!!unplaced}
+									class:selected={selectedItemId === item.id}
+									role="button"
+									tabindex="0"
+									onclick={() => handleItemClick(item.id)}
+									onkeydown={(e) => { if (e.key === 'Enter') handleItemClick(item.id); }}
+								>
+									<span
+										class="item-dot"
+										style:background={packed?.color ?? (unplaced ? 'var(--color-warning)' : 'var(--color-border)')}
+									></span>
+									<span class="item-name">{item.name}</span>
+									<span class="item-dims">
+										{item.dimensions.l}×{item.dimensions.w}×{item.dimensions.h}″
 									</span>
-								{/if}
-							</div>
-						{/each}
+									{#if inTrailer}
+										<button
+											class="item-remove"
+											onclick={(e) => { e.stopPropagation(); removeItem(item.id); }}
+											aria-label="Remove from trailer"
+										>
+											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+										</button>
+									{:else}
+										<span class="item-add-hint">
+											<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+										</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
 					</div>
-				</div>
+				</details>
 			{/if}
 		</div>
 	</div>
@@ -403,38 +376,6 @@
 						{/if}
 					</div>
 
-					{#if otherPacked.length > 0}
-						<div class="detail-section">
-							<span class="detail-section-label">Move next to</span>
-							<div class="snap-targets">
-								{#each otherPacked as target (target.item.id)}
-									<div class="snap-target">
-										<span class="snap-target-name" style:border-left="3px solid {target.color}">
-											{target.item.name}
-										</span>
-										<div class="snap-btns">
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'left')} title="Left of">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-											</button>
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'right')} title="Right of">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-											</button>
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'behind')} title="Behind">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
-											</button>
-											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'front')} title="In front">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-											</button>
-											<button class="snap-btn snap-above" onclick={() => snapItem(target.item.id, 'above')} title="On top">
-												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-											</button>
-										</div>
-									</div>
-								{/each}
-							</div>
-						</div>
-					{/if}
-
 					{#if item.contents.length > 0}
 						<div class="detail-section">
 							<span class="detail-section-label">Contents ({item.contents.length})</span>
@@ -452,6 +393,39 @@
 							<p class="detail-notes">{item.notes}</p>
 						</div>
 					{/if}
+				</div>
+			</div>
+		{/if}
+
+		<!-- Floating snap controls — bottom-right of scene -->
+		{#if selectedPacked && otherPacked.length > 0}
+			<div class="snap-float">
+				<span class="snap-float-label">Move <strong>{selectedPacked.item.name}</strong> next to</span>
+				<div class="snap-targets">
+					{#each otherPacked as target (target.item.id)}
+						<div class="snap-target">
+							<span class="snap-target-name" style:border-left="3px solid {target.color}">
+								{target.item.name}
+							</span>
+							<div class="snap-btns">
+								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'left')} title="Left of">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+								</button>
+								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'right')} title="Right of">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+								</button>
+								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'behind')} title="Behind">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+								</button>
+								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'front')} title="In front">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+								</button>
+								<button class="snap-btn snap-above" onclick={() => snapItem(target.item.id, 'above')} title="On top">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+								</button>
+							</div>
+						</div>
+					{/each}
 				</div>
 			</div>
 		{/if}
@@ -485,6 +459,7 @@
 	}
 
 	.right-panel {
+		position: relative;
 		flex: 1;
 		display: flex;
 		flex-direction: column;
@@ -656,19 +631,48 @@
 		margin: 0;
 	}
 
-	/* Snap-to controls */
+	/* Floating snap panel */
+	.snap-float {
+		position: absolute;
+		bottom: 12px;
+		right: 12px;
+		max-width: 340px;
+		max-height: 50%;
+		overflow-y: auto;
+		padding: 10px 12px;
+		background: rgba(23, 23, 23, 0.85);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+		z-index: 10;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.snap-float-label {
+		font-size: 11px;
+		color: var(--color-text-secondary);
+		font-weight: 500;
+	}
+
+	.snap-float-label strong {
+		color: var(--color-text);
+	}
+
 	.snap-targets {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 4px;
 	}
 
 	.snap-target {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 6px 8px;
-		background: var(--color-bg-card);
+		padding: 5px 8px;
+		background: rgba(255, 255, 255, 0.04);
 		border-radius: var(--radius-sm);
 	}
 
@@ -700,7 +704,7 @@
 	}
 
 	.snap-btn:hover {
-		background: var(--color-bg-elevated);
+		background: rgba(255, 255, 255, 0.08);
 		color: var(--color-text);
 	}
 
@@ -714,20 +718,57 @@
 	}
 
 	/* Inventory sidebar list */
-	.inventory-summary {
-		padding: 16px;
-		border-top: 1px solid var(--color-border);
+	/* Accordion */
+	.accordion {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		margin: 0 16px;
+		overflow: hidden;
 	}
 
-	.inv-header {
+	.accordion-trigger {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 10px;
+		gap: 8px;
+		padding: 10px 12px;
+		cursor: pointer;
+		list-style: none;
+		-webkit-tap-highlight-color: transparent;
+		user-select: none;
 	}
 
-	.inv-header .section-label {
+	.accordion-trigger::-webkit-details-marker { display: none; }
+
+	.accordion-trigger .section-label {
 		margin-bottom: 0;
+	}
+
+	.accordion-hint {
+		flex: 1;
+		text-align: right;
+		font-size: 11px;
+		color: var(--color-text-muted);
+		font-weight: 500;
+	}
+
+	.accordion-chevron {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		transition: transform 0.2s;
+	}
+
+	.accordion[open] > .accordion-trigger .accordion-chevron {
+		transform: rotate(180deg);
+	}
+
+	.accordion-body {
+		padding: 0 12px 12px;
+	}
+
+	.inv-actions {
+		display: flex;
+		gap: 8px;
+		margin-bottom: 10px;
 	}
 
 	.add-all-btn {

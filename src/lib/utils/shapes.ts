@@ -324,6 +324,15 @@ export function createItemMesh(
 ): THREE.Group {
 	const builder = BUILDERS[shape] ?? BUILDERS.generic;
 	const group = builder(color);
+
+	const box = new THREE.Box3().setFromObject(group);
+	const offsetY = -(box.min.y + 0.5);
+	if (Math.abs(offsetY) > 0.001) {
+		group.children.forEach((child) => {
+			child.position.y += offsetY;
+		});
+	}
+
 	group.scale.set(scaleX, scaleY, scaleZ);
 	return group;
 }

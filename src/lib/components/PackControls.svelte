@@ -2,7 +2,7 @@
 	import type { TrailerPreset, PackResult } from '$lib/types';
 	import { TRAILER_PRESETS, trailer, packResult, loadOrderStep } from '$lib/stores/trailer';
 	import { inventory } from '$lib/stores/inventory';
-	import { packItems } from '$lib/utils/packing';
+
 
 	let items = $state<import('$lib/types').InventoryItem[]>([]);
 	let currentTrailer = $state<TrailerPreset>(TRAILER_PRESETS[2]);
@@ -27,14 +27,6 @@
 	function applyCustom() {
 		trailer.setCustom(customLength, customWidth, customHeight);
 		showCustom = false;
-	}
-
-	function runPacking() {
-		if (items.length === 0) return;
-		const res = packItems(items, currentTrailer);
-		packResult.set(res);
-		loadOrderStep.set(0);
-		selectedItemId = null;
 	}
 
 	function nextStep() {
@@ -67,59 +59,53 @@
 </script>
 
 <div class="controls">
-	<div class="section">
-		<h3 class="section-label">Trailer</h3>
-		<div class="preset-grid">
-			{#each TRAILER_PRESETS as preset}
+	<details class="accordion" open>
+		<summary class="accordion-trigger">
+			<span class="section-label">Trailer</span>
+			<span class="accordion-hint">{currentTrailer.name}</span>
+			<svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+		</summary>
+		<div class="accordion-body">
+			<div class="preset-grid">
+				{#each TRAILER_PRESETS as preset}
+					<button
+						class="preset-btn"
+						class:active={currentTrailer.name === preset.name}
+						onclick={() => selectPreset(preset)}
+					>
+						<span class="preset-name">{preset.name}</span>
+						<span class="preset-dims">{preset.length}' × {preset.width}' × {preset.height}'</span>
+					</button>
+				{/each}
 				<button
 					class="preset-btn"
-					class:active={currentTrailer.name === preset.name}
-					onclick={() => selectPreset(preset)}
+					class:active={currentTrailer.name === 'Custom'}
+					onclick={() => showCustom = !showCustom}
 				>
-					<span class="preset-name">{preset.name}</span>
-					<span class="preset-dims">{preset.length}' × {preset.width}' × {preset.height}'</span>
+					<span class="preset-name">Custom</span>
+					<span class="preset-dims">Set your own</span>
 				</button>
-			{/each}
-			<button
-				class="preset-btn"
-				class:active={currentTrailer.name === 'Custom'}
-				onclick={() => showCustom = !showCustom}
-			>
-				<span class="preset-name">Custom</span>
-				<span class="preset-dims">Set your own</span>
-			</button>
-		</div>
-
-		{#if showCustom}
-			<div class="custom-row">
-				<label class="custom-field">
-					<span>L (ft)</span>
-					<input type="number" bind:value={customLength} min="1" step="0.5" inputmode="decimal" />
-				</label>
-				<label class="custom-field">
-					<span>W (ft)</span>
-					<input type="number" bind:value={customWidth} min="1" step="0.5" inputmode="decimal" />
-				</label>
-				<label class="custom-field">
-					<span>H (ft)</span>
-					<input type="number" bind:value={customHeight} min="1" step="0.5" inputmode="decimal" />
-				</label>
-				<button class="apply-btn" onclick={applyCustom}>Set</button>
 			</div>
-		{/if}
-	</div>
 
-	<button
-		class="pack-btn"
-		onclick={runPacking}
-		disabled={items.length === 0}
-	>
-		{#if items.length === 0}
-			No items to pack
-		{:else}
-			Pack {items.length} items into {currentTrailer.name}
-		{/if}
-	</button>
+			{#if showCustom}
+				<div class="custom-row">
+					<label class="custom-field">
+						<span>L (ft)</span>
+						<input type="number" bind:value={customLength} min="1" step="0.5" inputmode="decimal" />
+					</label>
+					<label class="custom-field">
+						<span>W (ft)</span>
+						<input type="number" bind:value={customWidth} min="1" step="0.5" inputmode="decimal" />
+					</label>
+					<label class="custom-field">
+						<span>H (ft)</span>
+						<input type="number" bind:value={customHeight} min="1" step="0.5" inputmode="decimal" />
+					</label>
+					<button class="apply-btn" onclick={applyCustom}>Set</button>
+				</div>
+			{/if}
+		</div>
+	</details>
 
 	{#if result}
 		<div class="result-summary">
@@ -147,34 +133,40 @@
 				</div>
 			{/if}
 
-			<div class="load-order">
-				<h3 class="section-label">Load Order</h3>
-				<div class="stepper">
-					<button class="step-btn" onclick={prevStep} disabled={step <= 0} aria-label="Previous step">
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-					</button>
-					<span class="step-display">
-						{#if step === 0}
-							All ({result.placed.length})
-						{:else}
-							{step} / {result.placed.length}
-						{/if}
-					</span>
-					<button class="step-btn" onclick={nextStep} disabled={step >= result.placed.length} aria-label="Next step">
-						<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-					</button>
-				</div>
-				{#if step > 0}
-					{@const current = result.placed[step - 1]}
-					<div class="current-item" style="border-left: 4px solid {current.color};">
-						<span class="current-name">{current.item.name}</span>
-						<span class="current-dims">{current.rotation.l}″ × {current.rotation.w}″ × {current.rotation.h}″</span>
+			<details class="accordion" open>
+				<summary class="accordion-trigger">
+					<span class="section-label">Load Order</span>
+					<span class="accordion-hint">{step === 0 ? `All (${result.placed.length})` : `${step} / ${result.placed.length}`}</span>
+					<svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+				</summary>
+				<div class="accordion-body">
+					<div class="stepper">
+						<button class="step-btn" onclick={prevStep} disabled={step <= 0} aria-label="Previous step">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+						</button>
+						<span class="step-display">
+							{#if step === 0}
+								All ({result.placed.length})
+							{:else}
+								{step} / {result.placed.length}
+							{/if}
+						</span>
+						<button class="step-btn" onclick={nextStep} disabled={step >= result.placed.length} aria-label="Next step">
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+						</button>
 					</div>
-				{/if}
-				{#if step > 0}
-					<button class="reset-btn" onclick={resetSteps}>Show All</button>
-				{/if}
-			</div>
+					{#if step > 0}
+						{@const current = result.placed[step - 1]}
+						<div class="current-item" style="border-left: 4px solid {current.color};">
+							<span class="current-name">{current.item.name}</span>
+							<span class="current-dims">{current.rotation.l}″ × {current.rotation.w}″ × {current.rotation.h}″</span>
+						</div>
+					{/if}
+					{#if step > 0}
+						<button class="reset-btn" onclick={resetSteps}>Show All</button>
+					{/if}
+				</div>
+			</details>
 		</div>
 
 		{#if selectedPacked}
@@ -197,6 +189,52 @@
 		gap: 16px;
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
+	}
+
+	/* Accordion */
+	.accordion {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+	}
+
+	.accordion-trigger {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 12px;
+		cursor: pointer;
+		list-style: none;
+		-webkit-tap-highlight-color: transparent;
+		user-select: none;
+	}
+
+	.accordion-trigger::-webkit-details-marker { display: none; }
+
+	.accordion-trigger .section-label {
+		margin-bottom: 0;
+	}
+
+	.accordion-hint {
+		flex: 1;
+		text-align: right;
+		font-size: 11px;
+		color: var(--color-text-muted);
+		font-weight: 500;
+	}
+
+	.accordion-chevron {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		transition: transform 0.2s;
+	}
+
+	.accordion[open] > .accordion-trigger .accordion-chevron {
+		transform: rotate(180deg);
+	}
+
+	.accordion-body {
+		padding: 0 12px 12px;
 	}
 
 	.section-label {
@@ -274,25 +312,6 @@
 		font-weight: 600;
 		border-radius: var(--radius-sm);
 		white-space: nowrap;
-	}
-
-	.pack-btn {
-		width: 100%;
-		padding: 14px;
-		background: var(--color-accent);
-		color: var(--color-accent-fg);
-		font-size: 15px;
-		font-weight: 600;
-		border-radius: var(--radius-md);
-		transition: background 0.15s;
-	}
-
-	.pack-btn:disabled {
-		opacity: 0.4;
-	}
-
-	.pack-btn:active {
-		background: var(--color-accent-hover);
 	}
 
 	.result-summary {

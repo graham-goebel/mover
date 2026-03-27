@@ -4,6 +4,7 @@
 	import type { PackedItem, TrailerPreset } from '$lib/types';
 	import * as THREE from 'three';
 	import { createItemMesh, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
+	import SceneSetup from './SceneSetup.svelte';
 
 	interface Props {
 		trailer: TrailerPreset;
@@ -64,6 +65,7 @@
 </script>
 
 <Canvas>
+	<SceneSetup />
 	<T.PerspectiveCamera
 		makeDefault
 		position={[tl * 1.5, th * 1.5, tw * 2]}

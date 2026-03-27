@@ -82,97 +82,127 @@
 	<ItemDetail item={editingItem} onClose={() => editingId = null} />
 {/if}
 
-{#if showAddFlow}
-	<div class="add-overlay">
-		{#if flowStep === 'capture'}
-			<div class="add-overlay-header">
-				<button class="overlay-close" onclick={closeAddFlow} aria-label="Close">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-				</button>
-				<h2>Add Item</h2>
-				<div style="width: 32px"></div>
-			</div>
-			<div class="capture-area">
-				<CameraCapture onCapture={handleCapture} />
-				<div class="or-divider"><span>or</span></div>
-				<button class="manual-btn" onclick={handleManualEntry}>
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-					Add Manually
-				</button>
-			</div>
-		{:else if flowStep === 'measure' && photoUrl}
-			<MeasurementCanvas
-				{photoUrl}
-				onComplete={handleMeasureComplete}
-				onCancel={() => { photoUrl = null; flowStep = 'capture'; }}
-			/>
-		{:else if flowStep === 'form' && measuredDims && finalPhoto}
-			<ItemForm
-				photo={finalPhoto}
-				dimensions={measuredDims}
-				onBack={() => { flowStep = 'measure'; }}
-				onSaved={closeAddFlow}
-			/>
-		{/if}
-	</div>
-{/if}
+<div class="inv-page" class:panel-open={showAddFlow}>
+	<!-- Left: inventory list -->
+	<div class="left-panel">
+		<div class="inv-scroll">
+			<header class="inv-header">
+				<div class="header-top">
+					<h1>My Items</h1>
+					<div class="stats">
+						<span class="stat">{items.length} items</span>
+						<span class="stat-dot">·</span>
+						<span class="stat">{Math.round(totalVolume * 10) / 10} cu ft</span>
+					</div>
+				</div>
 
-<div class="inventory">
-	<header class="inv-header">
-		<div class="header-top">
-			<h1>My Items</h1>
-			<div class="stats">
-				<span class="stat">{items.length} items</span>
-				<span class="stat-dot">·</span>
-				<span class="stat">{Math.round(totalVolume * 10) / 10} cu ft</span>
-			</div>
-		</div>
+				<div class="filter-row">
+					{#each filters as f}
+						<button
+							class="filter-pill"
+							class:active={filterCategory === f.value}
+							onclick={() => filterCategory = f.value}
+						>
+							{f.label}
+						</button>
+					{/each}
+				</div>
+			</header>
 
-		<div class="filter-row">
-			{#each filters as f}
-				<button
-					class="filter-pill"
-					class:active={filterCategory === f.value}
-					onclick={() => filterCategory = f.value}
-				>
-					{f.label}
-				</button>
-			{/each}
-		</div>
-	</header>
-
-	{#if filtered.length === 0}
-		<div class="empty-state">
-			{#if items.length === 0}
-				<div class="empty-icon">📦</div>
-				<h3>No items yet</h3>
-				<p>Tap the <strong>+</strong> button to photograph and measure your first item</p>
+			{#if filtered.length === 0}
+				<div class="empty-state">
+					{#if items.length === 0}
+						<div class="empty-icon">📦</div>
+						<h3>No items yet</h3>
+						<p>Tap the <strong>+</strong> button to photograph and measure your first item</p>
+					{:else}
+						<p>No items in this category</p>
+					{/if}
+				</div>
 			{:else}
-				<p>No items in this category</p>
+				<div class="item-list">
+					{#each filtered as item (item.id)}
+						<ItemCard
+							{item}
+							onTap={(id) => editingId = id}
+							onDelete={(id) => inventory.remove(id)}
+						/>
+					{/each}
+				</div>
 			{/if}
 		</div>
-	{:else}
-		<div class="item-list">
-			{#each filtered as item (item.id)}
-				<ItemCard
-					{item}
-					onTap={(id) => editingId = id}
-					onDelete={(id) => inventory.remove(id)}
-				/>
-			{/each}
+
+		<button class="fab" onclick={openAddFlow} aria-label="Add item">
+			<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+				<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+			</svg>
+		</button>
+	</div>
+
+	<!-- Right: add-item flow -->
+	{#if showAddFlow}
+		<div class="right-panel">
+			<div class="add-header">
+				<h2>Add Item</h2>
+				<button class="add-close" onclick={closeAddFlow} aria-label="Close">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+				</button>
+			</div>
+
+			<div class="add-body">
+				{#if flowStep === 'capture'}
+					<div class="capture-area">
+						<CameraCapture onCapture={handleCapture} />
+						<div class="or-divider"><span>or</span></div>
+						<button class="manual-btn" onclick={handleManualEntry}>
+							<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+							Add Manually
+						</button>
+					</div>
+				{:else if flowStep === 'measure' && photoUrl}
+					<MeasurementCanvas
+						{photoUrl}
+						onComplete={handleMeasureComplete}
+						onCancel={() => { photoUrl = null; flowStep = 'capture'; }}
+					/>
+				{:else if flowStep === 'form' && measuredDims && finalPhoto}
+					<ItemForm
+						photo={finalPhoto}
+						dimensions={measuredDims}
+						onBack={() => { flowStep = 'measure'; }}
+						onSaved={closeAddFlow}
+					/>
+				{/if}
+			</div>
 		</div>
 	{/if}
-
-	<button class="fab" onclick={openAddFlow} aria-label="Add item">
-		<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-			<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-		</svg>
-	</button>
 </div>
 
 <style>
-	/* Add item overlay */
-	.add-overlay {
+	.inv-page {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+	}
+
+	/* Left panel — full width on mobile */
+	.left-panel {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		position: relative;
+	}
+
+	.inv-scroll {
+		flex: 1;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		padding: 0 16px 24px;
+	}
+
+	/* Right panel — overlay on mobile */
+	.right-panel {
 		position: fixed;
 		inset: 0;
 		z-index: 200;
@@ -181,22 +211,38 @@
 		flex-direction: column;
 	}
 
-	.add-overlay-header {
+	.add-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 12px 16px;
+		padding: 14px 16px;
 		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
 	}
 
-	.add-overlay-header h2 {
+	.add-header h2 {
 		font-size: 17px;
 		font-weight: 600;
 	}
 
-	.overlay-close {
+	.add-close {
 		padding: 6px;
 		color: var(--color-text-secondary);
+		border-radius: 6px;
+		transition: background 0.15s;
+	}
+
+	.add-close:hover {
+		background: var(--color-bg-elevated);
+	}
+
+	.add-body {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.capture-area {
@@ -206,6 +252,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 0;
+		padding: 24px;
 	}
 
 	.or-divider {
@@ -242,34 +289,7 @@
 		background: var(--color-bg-elevated);
 	}
 
-	/* FAB */
-	.fab {
-		position: fixed;
-		bottom: calc(var(--tab-bar-height) + 8px);
-		right: 20px;
-		width: 56px;
-		height: 56px;
-		border-radius: 50%;
-		background: var(--color-accent);
-		color: var(--color-accent-fg);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-		z-index: 40;
-		transition: transform 0.15s, box-shadow 0.15s;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.fab:active {
-		transform: scale(0.92);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-	}
-
-	.inventory {
-		padding: 0 16px 24px;
-	}
-
+	/* Header */
 	.inv-header {
 		position: sticky;
 		top: 0;
@@ -368,5 +388,61 @@
 		font-size: 14px;
 		color: var(--color-text-muted);
 		line-height: 1.5;
+	}
+
+	/* FAB */
+	.fab {
+		position: fixed;
+		bottom: calc(var(--tab-bar-height) + 8px);
+		right: 20px;
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		background: var(--color-accent);
+		color: var(--color-accent-fg);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		z-index: 40;
+		transition: transform 0.15s, box-shadow 0.15s;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.fab:active {
+		transform: scale(0.92);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	}
+
+	/* ---- Desktop: side-by-side ---- */
+	@media (min-width: 768px) {
+		.inv-page {
+			flex-direction: row;
+		}
+
+		.left-panel {
+			width: 400px;
+			flex-shrink: 0;
+			border-right: 1px solid var(--color-border);
+			background: var(--color-bg);
+		}
+
+		.inv-page.panel-open .left-panel {
+			width: 360px;
+		}
+
+		.right-panel {
+			position: relative;
+			inset: unset;
+			z-index: auto;
+			flex: 1;
+			min-width: 0;
+		}
+
+		.fab {
+			position: absolute;
+			bottom: 20px;
+			right: 20px;
+		}
 	}
 </style>

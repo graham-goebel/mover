@@ -16,7 +16,10 @@
 <nav class="tab-bar">
 	<div class="tab-pill">
 		{#each tabs as tab}
-			{@const active = currentPath === tab.href || (tab.href !== '/' && currentPath.startsWith(tab.href))}
+			{@const isRoot = tab.href.endsWith('/') && !tabs.some(t => t !== tab && currentPath.startsWith(t.href) && !t.href.endsWith('/'))}
+			{@const active = isRoot
+				? (currentPath === tab.href || currentPath === tab.href.slice(0, -1))
+				: currentPath.startsWith(tab.href)}
 			<a href={tab.href} class="tab" class:active>
 				<div class="tab-icon">
 					{#if tab.icon === 'inventory'}
@@ -75,6 +78,7 @@
 	}
 
 	.tab {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
