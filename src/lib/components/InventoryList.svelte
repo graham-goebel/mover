@@ -12,7 +12,7 @@
 	let items = $state<InventoryItem[]>([]);
 	let filterCategory = $state<ItemCategory | 'all'>('all');
 
-	type SidebarMode = 'add' | 'edit' | 'photo';
+	type SidebarMode = 'add' | 'view' | 'edit' | 'photo';
 	let sidebarMode = $state<SidebarMode>('add');
 	let editingId = $state<string | null>(null);
 
@@ -102,10 +102,17 @@
 		resetForm();
 	}
 
-	function switchToEdit(id: string) {
+	function switchToView(id: string) {
 		const item = items.find((it) => it.id === id);
 		if (!item) return;
 		editingId = id;
+		sidebarMode = 'view';
+		showDeleteConfirm = false;
+	}
+
+	function startEditing() {
+		const item = editingItem;
+		if (!item) return;
 		sidebarMode = 'edit';
 		name = item.name;
 		l = item.dimensions.l;
@@ -186,14 +193,36 @@
 		sidebarMode = editingId ? 'edit' : 'add';
 		rawPhoto = null;
 	}
+
+	function shapeLabel(s: string): string {
+		return SHAPE_OPTIONS.find(o => o.value === s)?.label ?? s;
+	}
+
+	function shapeIcon(s: string): string {
+		return SHAPE_OPTIONS.find(o => o.value === s)?.icon ?? '📐';
+	}
+
+	function catLabel(c: string): string {
+		return categories.find(cat => cat.value === c)?.label ?? c;
+	}
+
+	function catIcon(c: string): string {
+		return categories.find(cat => cat.value === c)?.icon ?? '📋';
+	}
 </script>
 
 <div class="inv-page">
 	<!-- Left sidebar -->
 	<div class="left-panel">
 		<div class="sidebar-header">
-			{#if sidebarMode === 'edit'}
+			{#if sidebarMode === 'view'}
 				<button class="sidebar-back" onclick={switchToAdd} aria-label="Back to add">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+				</button>
+				<h2>Item Details</h2>
+				<button class="sidebar-action" onclick={startEditing}>Edit</button>
+			{:else if sidebarMode === 'edit'}
+				<button class="sidebar-back" onclick={() => editingId ? switchToView(editingId) : switchToAdd()} aria-label="Cancel edit">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
 				</button>
 				<h2>Edit Item</h2>
@@ -211,7 +240,72 @@
 		</div>
 
 		<div class="sidebar-scroll">
-			{#if sidebarMode === 'photo'}
+			{#if sidebarMode === 'view' && editingItem}
+				{@const item = editingItem}
+				<div class="view-panel">
+					{#if item.photo && !item.photo.includes('data:image/svg+xml')}
+						<div class="view-photo">
+							<img src={item.photo} alt={item.name} />
+						</div>
+					{/if}
+
+					<div class="view-name">{item.name}</div>
+
+					<div class="view-meta">
+						<div class="view-row">
+							<span class="view-label">Dimensions</span>
+							<span class="view-value">{item.dimensions.l}″ × {item.dimensions.w}″ × {item.dimensions.h}″</span>
+						</div>
+						<div class="view-row">
+							<span class="view-label">Volume</span>
+							<span class="view-value">{volumeCuFt(item.dimensions.l, item.dimensions.w, item.dimensions.h)} cu ft</span>
+						</div>
+						{#if item.weight}
+							<div class="view-row">
+								<span class="view-label">Weight</span>
+								<span class="view-value">{item.weight} lbs</span>
+							</div>
+						{/if}
+						<div class="view-row">
+							<span class="view-label">Category</span>
+							<span class="view-value">{catIcon(item.category)} {catLabel(item.category)}</span>
+						</div>
+						<div class="view-row">
+							<span class="view-label">Shape</span>
+							<span class="view-value">{shapeIcon(item.shape)} {shapeLabel(item.shape)}</span>
+						</div>
+					</div>
+
+					<div class="view-badges">
+						{#if item.fragile}
+							<span class="badge badge-warn">⚠️ Fragile</span>
+						{/if}
+						{#if item.stackable}
+							<span class="badge badge-ok">✓ Stackable</span>
+						{:else}
+							<span class="badge badge-warn">🚫 No Stack</span>
+						{/if}
+					</div>
+
+					{#if item.contents.length > 0}
+						<div class="view-section">
+							<span class="view-section-label">Contents ({item.contents.length})</span>
+							<ul class="view-contents">
+								{#each item.contents as c}
+									<li>{c}</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					{#if item.notes}
+						<div class="view-section">
+							<span class="view-section-label">Notes</span>
+							<p class="view-notes">{item.notes}</p>
+						</div>
+					{/if}
+				</div>
+			{:else if sidebarMode === 'photo'}
 				{#if photoStep === 'capture'}
 					<div class="photo-capture-area">
 						<CameraCapture onCapture={handleCapture} />
@@ -424,7 +518,7 @@
 					{#each filtered as item (item.id)}
 						<ItemCard
 							{item}
-							onTap={(id) => switchToEdit(id)}
+							onTap={(id) => switchToView(id)}
 							onDelete={(id) => inventory.remove(id)}
 						/>
 					{/each}
@@ -494,6 +588,121 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		padding: 0 16px 24px;
+	}
+
+	/* View panel (read-only) */
+	.view-panel {
+		padding: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.view-photo {
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		max-height: 180px;
+	}
+
+	.view-photo img {
+		width: 100%;
+		object-fit: cover;
+	}
+
+	.view-name {
+		font-size: 20px;
+		font-weight: 700;
+	}
+
+	.view-meta {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		overflow: hidden;
+	}
+
+	.view-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 10px 12px;
+	}
+
+	.view-row + .view-row {
+		border-top: 1px solid var(--color-border);
+	}
+
+	.view-label {
+		font-size: 13px;
+		color: var(--color-text-secondary);
+		font-weight: 500;
+	}
+
+	.view-value {
+		font-size: 13px;
+		font-weight: 600;
+	}
+
+	.view-badges {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.badge {
+		font-size: 12px;
+		font-weight: 600;
+		padding: 4px 10px;
+		border-radius: 100px;
+	}
+
+	.badge-warn {
+		background: var(--color-warning-soft);
+		color: var(--color-warning);
+	}
+
+	.badge-ok {
+		background: rgba(34, 197, 94, 0.1);
+		color: #22c55e;
+	}
+
+	.view-section {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.view-section-label {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.view-contents {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.view-contents li {
+		font-size: 13px;
+		padding: 6px 10px;
+		background: var(--color-bg-card);
+		border-radius: var(--radius-sm);
+	}
+
+	.view-notes {
+		font-size: 13px;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		margin: 0;
 	}
 
 	/* Photo section */
