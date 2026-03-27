@@ -103,31 +103,47 @@
 		{@const shapeMesh = getShapeMesh(packed)}
 
 		<T.Group position={pos}>
-			<!-- Invisible click target (bounding box) -->
-			<T.Mesh onclick={() => handleItemClick(packed.item.id)}>
+			<!-- Click target — fully transparent but raycast-able -->
+			<T.Mesh
+				onclick={() => handleItemClick(packed.item.id)}
+			>
 				<T.BoxGeometry args={scl} />
-				<T.MeshBasicMaterial visible={false} />
+				<T.MeshBasicMaterial transparent opacity={0} depthWrite={false} />
 			</T.Mesh>
 
 			<!-- Procedural shape -->
 			<T is={shapeMesh.clone()} />
 
-			<!-- Selection wireframe -->
-			{#if isSelected}
-				<T.LineSegments>
-					<T.EdgesGeometry args={[new THREE.BoxGeometry(...scl)]} />
-					<T.LineBasicMaterial color="#ffffff" transparent opacity={0.9} />
-				</T.LineSegments>
-			{/if}
+			<!-- Bounding box wireframe -->
+			<T.LineSegments>
+				<T.EdgesGeometry args={[new THREE.BoxGeometry(...scl)]} />
+				<T.LineBasicMaterial
+					color={isSelected ? '#ffffff' : '#000000'}
+					transparent
+					opacity={isSelected ? 1 : 0.15}
+				/>
+			</T.LineSegments>
 
+			<!-- Name label floating above -->
 			{#if isSelected}
 				<Text
 					text={packed.item.name}
-					fontSize={0.06}
+					fontSize={Math.max(0.04, Math.min(0.08, scl[0] * 0.4))}
 					color="white"
 					anchorY="bottom"
-					position.y={scl[1] / 2 + 0.04}
-					outlineWidth={0.005}
+					anchorX="center"
+					position.y={scl[1] / 2 + 0.05}
+					outlineWidth={0.006}
+					outlineColor="#000000"
+				/>
+				<Text
+					text="{packed.rotation.l}″×{packed.rotation.w}″×{packed.rotation.h}″"
+					fontSize={Math.max(0.03, Math.min(0.05, scl[0] * 0.25))}
+					color="#a3a3a3"
+					anchorY="top"
+					anchorX="center"
+					position.y={-(scl[1] / 2 + 0.03)}
+					outlineWidth={0.004}
 					outlineColor="#000000"
 				/>
 			{/if}
