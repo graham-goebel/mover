@@ -44,7 +44,39 @@ function createTrailerStore() {
 
 export const trailer = createTrailerStore();
 
-export const packResult = writable<PackResult | null>(null);
+const PACK_KEY = 'mover_pack_result';
+
+function loadPackResult(): PackResult | null {
+	if (typeof localStorage === 'undefined') return null;
+	try {
+		const raw = localStorage.getItem(PACK_KEY);
+		return raw ? JSON.parse(raw) : null;
+	} catch {
+		return null;
+	}
+}
+
+function createPackResultStore() {
+	const { subscribe, set: _set } = writable<PackResult | null>(loadPackResult());
+
+	function persist(value: PackResult | null) {
+		if (typeof localStorage !== 'undefined') {
+			if (value) {
+				localStorage.setItem(PACK_KEY, JSON.stringify(value));
+			} else {
+				localStorage.removeItem(PACK_KEY);
+			}
+		}
+		_set(value);
+	}
+
+	return {
+		subscribe,
+		set: persist
+	};
+}
+
+export const packResult = createPackResultStore();
 
 export const loadOrderStep = writable<number>(0);
 
