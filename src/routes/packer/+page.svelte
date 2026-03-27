@@ -89,6 +89,61 @@
 	function shapeIcon(shape: string | undefined): string {
 		return SHAPE_OPTIONS.find(s => s.value === shape)?.icon ?? '📦';
 	}
+
+	type SnapDir = 'left' | 'right' | 'front' | 'behind' | 'above';
+
+	function snapItem(targetId: string, direction: SnapDir) {
+		if (!result || !selectedItemId) return;
+		const src = result.placed.find(p => p.item.id === selectedItemId);
+		const tgt = result.placed.find(p => p.item.id === targetId);
+		if (!src || !tgt) return;
+
+		const newPos = { ...src.position };
+
+		switch (direction) {
+			case 'left':
+				newPos.x = tgt.position.x - src.rotation.l;
+				newPos.y = tgt.position.y;
+				newPos.z = tgt.position.z;
+				break;
+			case 'right':
+				newPos.x = tgt.position.x + tgt.rotation.l;
+				newPos.y = tgt.position.y;
+				newPos.z = tgt.position.z;
+				break;
+			case 'front':
+				newPos.x = tgt.position.x;
+				newPos.y = tgt.position.y;
+				newPos.z = tgt.position.z + tgt.rotation.w;
+				break;
+			case 'behind':
+				newPos.x = tgt.position.x;
+				newPos.y = tgt.position.y;
+				newPos.z = tgt.position.z - src.rotation.w;
+				break;
+			case 'above':
+				newPos.x = tgt.position.x;
+				newPos.y = tgt.position.y + tgt.rotation.h;
+				newPos.z = tgt.position.z;
+				break;
+		}
+
+		newPos.x = Math.max(0, newPos.x);
+		newPos.y = Math.max(0, newPos.y);
+		newPos.z = Math.max(0, newPos.z);
+
+		const updated: PackResult = {
+			...result,
+			placed: result.placed.map(p =>
+				p.item.id === selectedItemId ? { ...p, position: newPos } : p
+			)
+		};
+		packResult.set(updated);
+	}
+
+	const otherPacked = $derived(
+		liveResult?.placed.filter(p => p.item.id !== selectedItemId) ?? []
+	);
 </script>
 
 <svelte:head>
@@ -163,6 +218,38 @@
 							<span class="badge badge-ok">✓ Stackable</span>
 						{/if}
 					</div>
+
+					{#if otherPacked.length > 0}
+						<div class="detail-section">
+							<span class="detail-section-label">Move next to</span>
+							<div class="snap-targets">
+								{#each otherPacked as target (target.item.id)}
+									<div class="snap-target">
+										<span class="snap-target-name" style:border-left="3px solid {target.color}">
+											{target.item.name}
+										</span>
+										<div class="snap-btns">
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'left')} title="Left of">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+											</button>
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'right')} title="Right of">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+											</button>
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'behind')} title="Behind">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+											</button>
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'front')} title="In front">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+											</button>
+											<button class="snap-btn snap-above" onclick={() => snapItem(target.item.id, 'above')} title="On top">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+											</button>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
 
 					{#if item.contents.length > 0}
 						<div class="detail-section">
@@ -312,6 +399,38 @@
 							<span class="badge badge-ok">✓ Stackable</span>
 						{/if}
 					</div>
+
+					{#if otherPacked.length > 0}
+						<div class="detail-section">
+							<span class="detail-section-label">Move next to</span>
+							<div class="snap-targets">
+								{#each otherPacked as target (target.item.id)}
+									<div class="snap-target">
+										<span class="snap-target-name" style:border-left="3px solid {target.color}">
+											{target.item.name}
+										</span>
+										<div class="snap-btns">
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'left')} title="Left of">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+											</button>
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'right')} title="Right of">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+											</button>
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'behind')} title="Behind">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+											</button>
+											<button class="snap-btn" onclick={() => snapItem(target.item.id, 'front')} title="In front">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+											</button>
+											<button class="snap-btn snap-above" onclick={() => snapItem(target.item.id, 'above')} title="On top">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+											</button>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
 
 					{#if item.contents.length > 0}
 						<div class="detail-section">
@@ -532,6 +651,63 @@
 		background: var(--color-bg-card);
 		border-radius: var(--radius-sm);
 		margin: 0;
+	}
+
+	/* Snap-to controls */
+	.snap-targets {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.snap-target {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 8px;
+		background: var(--color-bg-card);
+		border-radius: var(--radius-sm);
+	}
+
+	.snap-target-name {
+		flex: 1;
+		font-size: 12px;
+		font-weight: 500;
+		padding-left: 8px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.snap-btns {
+		display: flex;
+		gap: 2px;
+		flex-shrink: 0;
+	}
+
+	.snap-btn {
+		width: 28px;
+		height: 28px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		color: var(--color-text-muted);
+		transition: all 0.15s;
+	}
+
+	.snap-btn:hover {
+		background: var(--color-bg-elevated);
+		color: var(--color-text);
+	}
+
+	.snap-btn:active {
+		background: var(--color-accent-soft);
+		color: var(--color-accent);
+	}
+
+	.snap-btn.snap-above {
+		color: var(--color-text-secondary);
 	}
 
 	/* Inventory sidebar list */
