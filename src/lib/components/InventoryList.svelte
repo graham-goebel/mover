@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { InventoryItem, ItemCategory, ItemShape, Dimensions } from '$lib/types';
 	import { inventory } from '$lib/stores/inventory';
+	import { moveDate } from '$lib/stores/app';
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 	import ItemCard from './ItemCard.svelte';
@@ -61,6 +62,22 @@
 	const totalVolume = $derived(
 		items.reduce((sum, it) => sum + volumeCuFt(it.dimensions.l, it.dimensions.w, it.dimensions.h), 0)
 	);
+
+	const totalWeight = $derived(
+		items.reduce((sum, it) => sum + (it.weight ?? 0), 0)
+	);
+
+	let moveDateVal = $state<string | null>(null);
+	moveDate.subscribe((v) => moveDateVal = v);
+
+	const daysUntilMove = $derived.by(() => {
+		if (!moveDateVal) return null;
+		const now = new Date();
+		now.setHours(0, 0, 0, 0);
+		const target = new Date(moveDateVal + 'T00:00:00');
+		const diff = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+		return diff;
+	});
 
 	const vol = $derived(volumeCuFt(l, w, h));
 
@@ -336,14 +353,47 @@
 	<!-- Right: inventory list -->
 	<div class="right-panel">
 		<div class="inv-scroll">
+			<!-- My Move stats -->
+			<div class="move-section">
+				<div class="move-header">
+					<h1>My Move</h1>
+					<div class="move-date-wrap">
+						<input
+							type="date"
+							class="move-date-input"
+							value={moveDateVal ?? ''}
+							oninput={(e) => moveDate.set(e.currentTarget.value || null)}
+						/>
+					</div>
+				</div>
+				<div class="move-stats">
+					<div class="move-stat">
+						<span class="move-stat-val">{items.length}</span>
+						<span class="move-stat-label">Items</span>
+					</div>
+					<div class="move-stat">
+						<span class="move-stat-val">{totalWeight > 0 ? totalWeight : '—'}</span>
+						<span class="move-stat-label">{totalWeight > 0 ? 'lbs' : 'Weight'}</span>
+					</div>
+					<div class="move-stat">
+						<span class="move-stat-val">{totalVolume > 0 ? Math.round(totalVolume * 10) / 10 : '—'}</span>
+						<span class="move-stat-label">cu ft</span>
+					</div>
+					<div class="move-stat">
+						{#if daysUntilMove !== null}
+							<span class="move-stat-val" class:urgent={daysUntilMove <= 7}>{daysUntilMove}</span>
+							<span class="move-stat-label">{daysUntilMove === 1 ? 'day' : 'days'}</span>
+						{:else}
+							<span class="move-stat-val dim">—</span>
+							<span class="move-stat-label">Set date</span>
+						{/if}
+					</div>
+				</div>
+			</div>
+
 			<header class="inv-header">
 				<div class="header-top">
-					<h1>My Items</h1>
-					<div class="stats">
-						<span class="stat">{items.length} items</span>
-						<span class="stat-dot">·</span>
-						<span class="stat">{Math.round(totalVolume * 10) / 10} cu ft</span>
-					</div>
+					<h2 class="items-heading">My Items</h2>
 				</div>
 
 				<div class="filter-row">
@@ -711,40 +761,95 @@
 	.cancel-delete { border: 1px solid var(--color-border); }
 	.confirm-delete { background: var(--color-danger); color: white; }
 
+	/* My Move section */
+	.move-section {
+		padding: 20px 0 16px;
+		border-bottom: 1px solid var(--color-border);
+		margin-bottom: 4px;
+	}
+
+	.move-header {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		margin-bottom: 16px;
+	}
+
+	.move-header h1 {
+		font-size: 28px;
+		font-weight: 700;
+	}
+
+	.move-date-input {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		background: var(--color-bg-card);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: 5px 10px;
+		color-scheme: dark;
+	}
+
+	.move-stats {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 10px;
+	}
+
+	.move-stat {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		padding: 14px 8px;
+		background: var(--color-bg-card);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
+	}
+
+	.move-stat-val {
+		font-size: 28px;
+		font-weight: 700;
+		line-height: 1;
+	}
+
+	.move-stat-val.urgent {
+		color: var(--color-warning);
+	}
+
+	.move-stat-val.dim {
+		color: var(--color-text-muted);
+	}
+
+	.move-stat-label {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
 	/* Inventory header */
 	.inv-header {
 		position: sticky;
 		top: 0;
 		background: var(--color-bg);
 		z-index: 10;
-		padding: 16px 0 12px;
+		padding: 12px 0;
 	}
 
 	.header-top {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		margin-bottom: 14px;
+		margin-bottom: 10px;
 	}
 
-	h1 {
-		font-size: 28px;
-		font-weight: 700;
+	.items-heading {
+		font-size: 18px;
+		font-weight: 600;
 	}
-
-	.stats {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.stat {
-		font-size: 14px;
-		color: var(--color-text-secondary);
-		font-weight: 500;
-	}
-
-	.stat-dot { color: var(--color-text-muted); }
 
 	.filter-row {
 		display: flex;

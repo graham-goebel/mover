@@ -4,6 +4,7 @@
 	import { inventory } from '$lib/stores/inventory';
 	import { packItems } from '$lib/utils/packing';
 	import { SHAPE_OPTIONS } from '$lib/utils/shapes';
+	import { accordionState } from '$lib/stores/app';
 	import PackControls from '$lib/components/PackControls.svelte';
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
 
@@ -240,7 +241,7 @@
 			{/if}
 
 			{#if items.length > 0}
-				<details class="accordion" open>
+				<details class="accordion" open={accordionState.isOpen('pack-inventory')} ontoggle={(e) => accordionState.toggle('pack-inventory', e.currentTarget.open)}>
 					<summary class="accordion-trigger">
 						<span class="section-label">Inventory ({items.length})</span>
 						<span class="accordion-hint">{packedIds.size} in trailer</span>

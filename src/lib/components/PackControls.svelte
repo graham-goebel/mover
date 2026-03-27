@@ -2,6 +2,7 @@
 	import type { TrailerPreset, PackResult } from '$lib/types';
 	import { TRAILER_PRESETS, trailer, packResult, loadOrderStep } from '$lib/stores/trailer';
 	import { inventory } from '$lib/stores/inventory';
+	import { accordionState } from '$lib/stores/app';
 
 
 	let items = $state<import('$lib/types').InventoryItem[]>([]);
@@ -59,7 +60,33 @@
 </script>
 
 <div class="controls">
-	<details class="accordion" open>
+	{#if result}
+		<div class="pack-stats">
+			<div class="pack-stat">
+				<span class="pack-stat-val">{result.placed.length}</span>
+				<span class="pack-stat-label">Placed</span>
+			</div>
+			<div class="pack-stat">
+				<span class="pack-stat-val warn">{result.unplaced.length}</span>
+				<span class="pack-stat-label">Won't fit</span>
+			</div>
+			<div class="pack-stat">
+				<span class="pack-stat-val accent">{result.utilization}%</span>
+				<span class="pack-stat-label">Used</span>
+			</div>
+		</div>
+
+		{#if result.unplaced.length > 0}
+			<div class="unplaced-list">
+				<p class="unplaced-title">Items that didn't fit:</p>
+				{#each result.unplaced as item}
+					<span class="unplaced-item">{item.name}</span>
+				{/each}
+			</div>
+		{/if}
+	{/if}
+
+	<details class="accordion" open={accordionState.isOpen('pack-trailer')} ontoggle={(e) => accordionState.toggle('pack-trailer', e.currentTarget.open)}>
 		<summary class="accordion-trigger">
 			<span class="section-label">Trailer</span>
 			<span class="accordion-hint">{currentTrailer.name}</span>
@@ -108,34 +135,9 @@
 	</details>
 
 	{#if result}
-		<div class="result-summary">
-			<div class="stat-row">
-				<div class="result-stat">
-					<span class="result-val">{result.placed.length}</span>
-					<span class="result-label">Placed</span>
-				</div>
-				<div class="result-stat">
-					<span class="result-val warn">{result.unplaced.length}</span>
-					<span class="result-label">Won't fit</span>
-				</div>
-				<div class="result-stat">
-					<span class="result-val accent">{result.utilization}%</span>
-					<span class="result-label">Used</span>
-				</div>
-			</div>
-
-			{#if result.unplaced.length > 0}
-				<div class="unplaced-list">
-					<p class="unplaced-title">Items that didn't fit:</p>
-					{#each result.unplaced as item}
-						<span class="unplaced-item">{item.name}</span>
-					{/each}
-				</div>
-			{/if}
-
-			<details class="accordion" open>
-				<summary class="accordion-trigger">
-					<span class="section-label">Load Order</span>
+		<details class="accordion" open={accordionState.isOpen('pack-load-order')} ontoggle={(e) => accordionState.toggle('pack-load-order', e.currentTarget.open)}>
+			<summary class="accordion-trigger">
+				<span class="section-label">Load Order</span>
 					<span class="accordion-hint">{step === 0 ? `All (${result.placed.length})` : `${step} / ${result.placed.length}`}</span>
 					<svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
 				</summary>
@@ -167,7 +169,6 @@
 					{/if}
 				</div>
 			</details>
-		</div>
 
 		{#if selectedPacked}
 			<div class="selected-info" style="border-left: 4px solid {selectedPacked.color};">
@@ -314,45 +315,43 @@
 		white-space: nowrap;
 	}
 
-	.result-summary {
-		display: flex;
-		flex-direction: column;
-		gap: 14px;
+	.pack-stats {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 10px;
 	}
 
-	.stat-row {
-		display: flex;
-		gap: 12px;
-	}
-
-	.result-stat {
-		flex: 1;
+	.pack-stat {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 2px;
-		padding: 12px 8px;
+		padding: 14px 8px;
 		background: var(--color-bg-card);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
 	}
 
-	.result-val {
-		font-size: 22px;
+	.pack-stat-val {
+		font-size: 28px;
 		font-weight: 700;
+		line-height: 1;
 	}
 
-	.result-val.warn {
+	.pack-stat-val.warn {
 		color: var(--color-warning);
 	}
 
-	.result-val.accent {
+	.pack-stat-val.accent {
 		color: var(--color-accent);
 	}
 
-	.result-label {
-		font-size: 11px;
-		color: var(--color-text-muted);
+	.pack-stat-label {
+		font-size: 12px;
 		font-weight: 500;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
 	}
 
 	.unplaced-list {
