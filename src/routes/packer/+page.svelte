@@ -2,6 +2,7 @@
 	import type { PackedItem, TrailerPreset, PackResult, InventoryItem } from '$lib/types';
 	import { trailer, packResult, loadOrderStep } from '$lib/stores/trailer';
 	import { inventory } from '$lib/stores/inventory';
+	import { packItems } from '$lib/utils/packing';
 	import { SHAPE_OPTIONS } from '$lib/utils/shapes';
 	import PackControls from '$lib/components/PackControls.svelte';
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
@@ -12,11 +13,53 @@
 	let selectedItemId = $state<string | null>(null);
 	let showControls = $state(true);
 	let items = $state<InventoryItem[]>([]);
+	let packedIds = $state(new Set<string>());
 
 	trailer.subscribe((v) => currentTrailer = v);
-	packResult.subscribe((v) => result = v);
+	packResult.subscribe((v) => {
+		result = v;
+		if (v) {
+			packedIds = new Set([
+				...v.placed.map(p => p.item.id),
+				...v.unplaced.map(u => u.id)
+			]);
+		}
+	});
 	loadOrderStep.subscribe((v) => step = v);
 	inventory.subscribe((v) => items = v);
+
+	function repack() {
+		const toPack = items.filter(i => packedIds.has(i.id));
+		if (toPack.length === 0) {
+			packResult.set(null);
+			return;
+		}
+		const res = packItems(toPack, currentTrailer);
+		packResult.set(res);
+		loadOrderStep.set(0);
+	}
+
+	function addItem(id: string) {
+		packedIds = new Set([...packedIds, id]);
+		repack();
+	}
+
+	function removeItem(id: string) {
+		const next = new Set(packedIds);
+		next.delete(id);
+		packedIds = next;
+		if (selectedItemId === id) selectedItemId = null;
+		repack();
+	}
+
+	function handleItemClick(id: string) {
+		const isPacked = liveResult?.placed.some(p => p.item.id === id);
+		if (isPacked) {
+			selectedItemId = selectedItemId === id ? null : id;
+		} else {
+			addItem(id);
+		}
+	}
 
 	const liveResult = $derived.by(() => {
 		if (!result) return null;
@@ -143,17 +186,27 @@
 
 			{#if items.length > 0}
 				<div class="inventory-summary">
-					<h3 class="section-label">Inventory ({items.length})</h3>
+					<div class="inv-header">
+						<h3 class="section-label">Inventory ({items.length})</h3>
+						{#if packedIds.size > 0 && packedIds.size < items.length}
+							<button class="add-all-btn" onclick={() => { packedIds = new Set(items.map(i => i.id)); repack(); }}>Add all</button>
+						{:else if packedIds.size === 0 && items.length > 0}
+							<button class="add-all-btn" onclick={() => { packedIds = new Set(items.map(i => i.id)); repack(); }}>Add all</button>
+						{:else if packedIds.size === items.length}
+							<button class="add-all-btn" onclick={() => { packedIds = new Set(); packResult.set(null); }}>Clear</button>
+						{/if}
+					</div>
 					<div class="item-list">
 						{#each items as item (item.id)}
 						{@const packed = liveResult?.placed.find(p => p.item.id === item.id)}
 						{@const unplaced = liveResult?.unplaced.find(u => u.id === item.id)}
+						{@const inTrailer = packedIds.has(item.id)}
 							<button
 								class="item-row"
 								class:packed={!!packed}
 								class:unplaced={!!unplaced}
 								class:selected={selectedItemId === item.id}
-								onclick={() => { if (packed) selectedItemId = selectedItemId === item.id ? null : item.id; }}
+								onclick={() => handleItemClick(item.id)}
 							>
 								<span
 									class="item-dot"
@@ -163,6 +216,19 @@
 								<span class="item-dims">
 									{item.dimensions.l}×{item.dimensions.w}×{item.dimensions.h}″
 								</span>
+								{#if inTrailer}
+									<button
+										class="item-remove"
+										onclick={(e) => { e.stopPropagation(); removeItem(item.id); }}
+										aria-label="Remove from trailer"
+									>
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+									</button>
+								{:else}
+									<span class="item-add-hint">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+									</span>
+								{/if}
 							</button>
 						{/each}
 					</div>
@@ -474,6 +540,31 @@
 		border-top: 1px solid var(--color-border);
 	}
 
+	.inv-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+	}
+
+	.inv-header .section-label {
+		margin-bottom: 0;
+	}
+
+	.add-all-btn {
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-accent);
+		padding: 4px 10px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		transition: all 0.15s;
+	}
+
+	.add-all-btn:active {
+		background: var(--color-bg-elevated);
+	}
+
 	.section-label {
 		font-size: 12px;
 		font-weight: 600;
@@ -500,7 +591,8 @@
 		cursor: default;
 	}
 
-	.item-row.packed {
+	.item-row.packed,
+	.item-row:not(.packed):not(.unplaced) {
 		cursor: pointer;
 	}
 
@@ -536,6 +628,31 @@
 		font-size: 11px;
 		color: var(--color-text-muted);
 		flex-shrink: 0;
+	}
+
+	.item-add-hint {
+		color: var(--color-text-muted);
+		opacity: 0.4;
+		flex-shrink: 0;
+		display: flex;
+		transition: opacity 0.15s;
+	}
+
+	.item-row:hover .item-add-hint {
+		opacity: 0.8;
+	}
+
+	.item-remove {
+		padding: 2px;
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+		display: flex;
+		border-radius: 4px;
+		transition: color 0.15s;
+	}
+
+	.item-remove:hover {
+		color: var(--color-danger);
 	}
 
 	/* Mobile detail drawer (slides up from bottom of scene) */
