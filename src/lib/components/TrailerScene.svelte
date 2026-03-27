@@ -3,18 +3,19 @@
 	import { OrbitControls, Text } from '@threlte/extras';
 	import type { PackedItem, TrailerPreset } from '$lib/types';
 	import * as THREE from 'three';
+	import { createItemMesh, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 
 	interface Props {
 		trailer: TrailerPreset;
 		packedItems: PackedItem[];
 		loadStep: number;
-		selectedId: string | null;
+		selectedItemId: string | null;
 		onSelectItem: (id: string | null) => void;
 	}
 
-	let { trailer, packedItems, loadStep, selectedId, onSelectItem }: Props = $props();
+	let { trailer, packedItems, loadStep, selectedItemId, onSelectItem }: Props = $props();
 
-	const SCALE = 0.02; // inches to scene units
+	const SCALE = 0.02;
 
 	const tl = $derived(trailer.length * 12 * SCALE);
 	const tw = $derived(trailer.width * 12 * SCALE);
@@ -42,7 +43,23 @@
 	}
 
 	function handleItemClick(id: string) {
-		onSelectItem(selectedId === id ? null : id);
+		onSelectItem(selectedItemId === id ? null : id);
+	}
+
+	const meshCache = new Map<string, THREE.Group>();
+
+	function getShapeMesh(packed: PackedItem): THREE.Group {
+		const scl = itemScale(packed);
+		const cacheKey = `${packed.item.id}-${packed.color}-${scl.join(',')}`;
+		let group = meshCache.get(cacheKey);
+		if (!group) {
+			const shape = packed.item.shape
+				?? CATEGORY_DEFAULT_SHAPE[packed.item.category]
+				?? 'generic';
+			group = createItemMesh(shape, packed.color, scl[0], scl[1], scl[2]);
+			meshCache.set(cacheKey, group);
+		}
+		return group;
 	}
 </script>
 
@@ -64,61 +81,45 @@
 	<T.DirectionalLight position={[5, 8, 5]} intensity={0.8} castShadow />
 	<T.DirectionalLight position={[-3, 4, -3]} intensity={0.3} />
 
-	<!-- Floor grid -->
 	<T.GridHelper args={[Math.max(tl, tw) * 3, 20, '#262626', '#1a1a1a']} />
 
-	<!-- Trailer wireframe shell -->
+	<!-- Trailer wireframe -->
 	<T.Mesh position={[0, th / 2, 0]}>
 		<T.BoxGeometry args={[tl, th, tw]} />
-		<T.MeshBasicMaterial
-			color="#525252"
-			wireframe
-			transparent
-			opacity={0.3}
-		/>
+		<T.MeshBasicMaterial color="#525252" wireframe transparent opacity={0.3} />
 	</T.Mesh>
 
-	<!-- Trailer floor (semi-transparent) -->
+	<!-- Trailer floor -->
 	<T.Mesh position={[0, 0.001, 0]} rotation.x={-Math.PI / 2}>
 		<T.PlaneGeometry args={[tl, tw]} />
-		<T.MeshStandardMaterial
-			color="#111111"
-			transparent
-			opacity={0.8}
-		/>
+		<T.MeshStandardMaterial color="#111111" transparent opacity={0.8} />
 	</T.Mesh>
 
-	<!-- Packed items -->
+	<!-- Packed items with procedural shapes -->
 	{#each visibleItems as packed (packed.item.id)}
 		{@const pos = itemPosition(packed)}
 		{@const scl = itemScale(packed)}
-		{@const isSelected = selectedId === packed.item.id}
+		{@const isSelected = selectedItemId === packed.item.id}
+		{@const shapeMesh = getShapeMesh(packed)}
 
 		<T.Group position={pos}>
-			<T.Mesh
-				onclick={() => handleItemClick(packed.item.id)}
-			>
+			<!-- Invisible click target (bounding box) -->
+			<T.Mesh onclick={() => handleItemClick(packed.item.id)}>
 				<T.BoxGeometry args={scl} />
-				<T.MeshStandardMaterial
-					color={packed.color}
-					transparent
-					opacity={isSelected ? 1 : 0.85}
-					roughness={0.4}
-					metalness={0.1}
-				/>
+				<T.MeshBasicMaterial visible={false} />
 			</T.Mesh>
 
-			<!-- Item edges for visibility -->
-			<T.LineSegments>
-				<T.EdgesGeometry args={[new THREE.BoxGeometry(...scl)]} />
-				<T.LineBasicMaterial
-					color={isSelected ? '#ffffff' : '#000000'}
-					transparent
-					opacity={isSelected ? 0.9 : 0.2}
-				/>
-			</T.LineSegments>
+			<!-- Procedural shape -->
+			<T is={shapeMesh.clone()} />
 
-			<!-- Label above item -->
+			<!-- Selection wireframe -->
+			{#if isSelected}
+				<T.LineSegments>
+					<T.EdgesGeometry args={[new THREE.BoxGeometry(...scl)]} />
+					<T.LineBasicMaterial color="#ffffff" transparent opacity={0.9} />
+				</T.LineSegments>
+			{/if}
+
 			{#if isSelected}
 				<Text
 					text={packed.item.name}

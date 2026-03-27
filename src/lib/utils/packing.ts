@@ -14,9 +14,9 @@ interface Placement {
 }
 
 const ITEM_COLORS = [
-	'#a3a3a3', '#737373', '#d4d4d4', '#8b8b8b', '#c0c0c0',
-	'#999999', '#b5b5b5', '#666666', '#e0e0e0', '#7a7a7a',
-	'#a8a8a8', '#909090', '#bfbfbf', '#858585', '#cccccc'
+	'#8b9dc3', '#a3a3a3', '#c4956a', '#8fae8b', '#b399c6',
+	'#c49898', '#7fb5b5', '#c4b97f', '#9e8fae', '#89a8c4',
+	'#ae9e8f', '#8fae9e', '#b5a37f', '#a3899e', '#7faeb5'
 ];
 
 /**

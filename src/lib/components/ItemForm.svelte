@@ -1,8 +1,9 @@
 <script lang="ts">
-	import type { Dimensions, ItemCategory } from '$lib/types';
+	import type { Dimensions, ItemCategory, ItemShape } from '$lib/types';
 	import { inventory } from '$lib/stores/inventory';
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
+	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 
 	interface Props {
 		photo: string;
@@ -14,6 +15,7 @@
 
 	let name = $state('');
 	let category = $state<ItemCategory>('box');
+	let shape = $state<ItemShape>('box');
 	let fragile = $state(false);
 	let stackable = $state(true);
 	let weight = $state(0);
@@ -28,6 +30,11 @@
 		{ value: 'other', label: 'Other', icon: '📋' }
 	];
 
+	function setCategory(cat: ItemCategory) {
+		category = cat;
+		shape = CATEGORY_DEFAULT_SHAPE[cat] ?? 'generic';
+	}
+
 	function handleSave() {
 		if (!name.trim()) return;
 		inventory.add({
@@ -36,6 +43,7 @@
 			dimensions,
 			weight: weight || undefined,
 			category,
+			shape,
 			fragile,
 			stackable,
 			contents: [],
@@ -76,10 +84,26 @@
 					<button
 						class="cat-btn"
 						class:active={category === cat.value}
-						onclick={() => category = cat.value}
+						onclick={() => setCategory(cat.value)}
 					>
 						<span class="cat-icon">{cat.icon}</span>
 						<span class="cat-label">{cat.label}</span>
+					</button>
+				{/each}
+			</div>
+		</div>
+
+		<div class="field">
+			<span class="field-label">3D Shape</span>
+			<div class="shape-grid">
+				{#each SHAPE_OPTIONS as s}
+					<button
+						class="shape-btn"
+						class:active={shape === s.value}
+						onclick={() => shape = s.value}
+					>
+						<span class="shape-icon">{s.icon}</span>
+						<span class="shape-label">{s.label}</span>
 					</button>
 				{/each}
 			</div>
@@ -230,6 +254,31 @@
 
 	.cat-icon { font-size: 20px; }
 	.cat-label { font-size: 12px; font-weight: 500; }
+
+	.shape-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 6px;
+	}
+
+	.shape-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+		padding: 8px 4px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		transition: all 0.15s;
+	}
+
+	.shape-btn.active {
+		border-color: #525252;
+		background: var(--color-bg-elevated);
+	}
+
+	.shape-icon { font-size: 18px; }
+	.shape-label { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); }
 
 	.toggles {
 		display: flex;

@@ -1,5 +1,20 @@
 export type ItemCategory = 'box' | 'furniture' | 'appliance' | 'fragile' | 'oddShape' | 'other';
 
+export type ItemShape =
+	| 'box'
+	| 'bin'
+	| 'bag'
+	| 'couch'
+	| 'chair'
+	| 'table'
+	| 'dresser'
+	| 'mattress'
+	| 'tv'
+	| 'lamp'
+	| 'appliance-tall'
+	| 'appliance-wide'
+	| 'generic';
+
 export interface Dimensions {
 	l: number; // length in inches
 	w: number; // width in inches
@@ -13,6 +28,7 @@ export interface InventoryItem {
 	dimensions: Dimensions;
 	weight?: number;
 	category: ItemCategory;
+	shape: ItemShape;
 	fragile: boolean;
 	stackable: boolean;
 	contents: string[];

@@ -1,8 +1,9 @@
 <script lang="ts">
-	import type { InventoryItem, ItemCategory } from '$lib/types';
+	import type { InventoryItem, ItemCategory, ItemShape } from '$lib/types';
 	import { inventory } from '$lib/stores/inventory';
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import { untrack } from 'svelte';
+	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 	import ContentsEditor from './ContentsEditor.svelte';
 
 	interface Props {
@@ -20,6 +21,7 @@
 			h: it.dimensions.h,
 			weight: it.weight ?? 0,
 			category: it.category as ItemCategory,
+			shape: (it.shape ?? CATEGORY_DEFAULT_SHAPE[it.category] ?? 'generic') as ItemShape,
 			fragile: it.fragile,
 			stackable: it.stackable,
 			notes: it.notes ?? ''
@@ -33,6 +35,7 @@
 	let h = $state(init.h);
 	let weight = $state(init.weight);
 	let category = $state<ItemCategory>(init.category);
+	let shape = $state<ItemShape>(init.shape);
 	let fragile = $state(init.fragile);
 	let stackable = $state(init.stackable);
 	let notes = $state(init.notes);
@@ -47,12 +50,18 @@
 		{ value: 'other', label: 'Other', icon: '📋' }
 	];
 
+	function setCategory(cat: ItemCategory) {
+		category = cat;
+		shape = CATEGORY_DEFAULT_SHAPE[cat] ?? 'generic';
+	}
+
 	function save() {
 		inventory.update(item.id, {
 			name,
 			dimensions: { l, w, h },
 			weight: weight || undefined,
 			category,
+			shape,
 			fragile,
 			stackable,
 			notes: notes || undefined
@@ -123,10 +132,26 @@
 						<button
 							class="cat-btn"
 							class:active={category === cat.value}
-							onclick={() => category = cat.value}
+							onclick={() => setCategory(cat.value)}
 						>
 							<span class="cat-icon">{cat.icon}</span>
 							<span class="cat-label">{cat.label}</span>
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<div class="field">
+				<span class="field-label">3D Shape</span>
+				<div class="shape-grid">
+					{#each SHAPE_OPTIONS as s}
+						<button
+							class="shape-btn"
+							class:active={shape === s.value}
+							onclick={() => shape = s.value}
+						>
+							<span class="shape-icon">{s.icon}</span>
+							<span class="shape-label">{s.label}</span>
 						</button>
 					{/each}
 				</div>
@@ -315,6 +340,31 @@
 		font-size: 12px;
 		font-weight: 500;
 	}
+
+	.shape-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 6px;
+	}
+
+	.shape-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+		padding: 8px 4px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		transition: all 0.15s;
+	}
+
+	.shape-btn.active {
+		border-color: #525252;
+		background: var(--color-bg-elevated);
+	}
+
+	.shape-btn .shape-icon { font-size: 18px; }
+	.shape-btn .shape-label { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); }
 
 	.toggles {
 		display: flex;
