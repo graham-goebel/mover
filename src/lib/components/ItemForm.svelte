@@ -2,6 +2,7 @@
 	import type { Dimensions, ItemCategory } from '$lib/types';
 	import { inventory } from '$lib/stores/inventory';
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 
 	interface Props {
 		photo: string;
@@ -40,7 +41,7 @@
 			contents: [],
 			notes: notes || undefined
 		});
-		goto('/');
+		goto(`${base}/`);
 	}
 </script>
 

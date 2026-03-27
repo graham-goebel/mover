@@ -2,13 +2,14 @@
 	import '../app.css';
 	import TabBar from '$lib/components/TabBar.svelte';
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
 
 	let { children } = $props();
 
 	const tabs = [
-		{ href: '/', label: 'Inventory', icon: 'inventory' },
-		{ href: '/measure', label: 'Add Item', icon: 'add' },
-		{ href: '/packer', label: 'Pack', icon: 'pack' }
+		{ href: `${base}/`, label: 'Inventory', icon: 'inventory' },
+		{ href: `${base}/measure`, label: 'Add Item', icon: 'add' },
+		{ href: `${base}/packer`, label: 'Pack', icon: 'pack' }
 	] as const;
 </script>
 

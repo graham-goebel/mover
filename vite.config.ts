@@ -11,19 +11,19 @@ export default defineConfig({
 				name: 'Mover',
 				short_name: 'Mover',
 				description: 'Moving inventory & pack planning',
-				theme_color: '#0f172a',
-				background_color: '#0f172a',
+				theme_color: '#09090b',
+				background_color: '#09090b',
 				display: 'standalone',
-				scope: '/',
-				start_url: '/',
+				scope: '/mover/',
+				start_url: '/mover/',
 				icons: [
 					{
-						src: '/icon-192.png',
+						src: '/mover/icon-192.png',
 						sizes: '192x192',
 						type: 'image/png'
 					},
 					{
-						src: '/icon-512.png',
+						src: '/mover/icon-512.png',
 						sizes: '512x512',
 						type: 'image/png',
 						purpose: 'any maskable'
