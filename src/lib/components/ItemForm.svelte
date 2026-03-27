@@ -9,9 +9,10 @@
 		photo: string;
 		dimensions: Dimensions;
 		onBack: () => void;
+		onSaved?: () => void;
 	}
 
-	let { photo, dimensions, onBack }: Props = $props();
+	let { photo, dimensions, onBack, onSaved }: Props = $props();
 
 	let name = $state('');
 	let category = $state<ItemCategory>('box');
@@ -49,7 +50,11 @@
 			contents: [],
 			notes: notes || undefined
 		});
-		goto(`${base}/`);
+		if (onSaved) {
+			onSaved();
+		} else {
+			goto(`${base}/`);
+		}
 	}
 </script>
 

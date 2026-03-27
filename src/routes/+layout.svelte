@@ -8,7 +8,6 @@
 
 	const tabs = [
 		{ href: `${base}/`, label: 'Inventory', icon: 'inventory' },
-		{ href: `${base}/measure`, label: 'Add Item', icon: 'add' },
 		{ href: `${base}/packer`, label: 'Pack', icon: 'pack' }
 	] as const;
 </script>

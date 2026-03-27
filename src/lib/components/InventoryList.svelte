@@ -1,13 +1,23 @@
 <script lang="ts">
-	import type { InventoryItem, ItemCategory } from '$lib/types';
+	import type { InventoryItem, ItemCategory, Dimensions } from '$lib/types';
 	import { inventory } from '$lib/stores/inventory';
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import ItemCard from './ItemCard.svelte';
 	import ItemDetail from './ItemDetail.svelte';
+	import CameraCapture from './CameraCapture.svelte';
+	import MeasurementCanvas from './MeasurementCanvas.svelte';
+	import ItemForm from './ItemForm.svelte';
 
 	let items = $state<InventoryItem[]>([]);
 	let editingId = $state<string | null>(null);
 	let filterCategory = $state<ItemCategory | 'all'>('all');
+
+	let showAddFlow = $state(false);
+	type FlowStep = 'capture' | 'measure' | 'form';
+	let flowStep = $state<FlowStep>('capture');
+	let photoUrl = $state<string | null>(null);
+	let measuredDims = $state<Dimensions | null>(null);
+	let finalPhoto = $state<string | null>(null);
 
 	inventory.subscribe((v) => items = v);
 
@@ -32,10 +42,79 @@
 	);
 
 	const editingItem = $derived(items.find((it) => it.id === editingId) ?? null);
+
+	function openAddFlow() {
+		showAddFlow = true;
+		flowStep = 'capture';
+		photoUrl = null;
+		measuredDims = null;
+		finalPhoto = null;
+	}
+
+	function closeAddFlow() {
+		showAddFlow = false;
+		photoUrl = null;
+		measuredDims = null;
+		finalPhoto = null;
+		flowStep = 'capture';
+	}
+
+	function handleCapture(dataUrl: string) {
+		photoUrl = dataUrl;
+		flowStep = 'measure';
+	}
+
+	function handleMeasureComplete(dims: Dimensions, photo: string) {
+		measuredDims = dims;
+		finalPhoto = photo;
+		flowStep = 'form';
+	}
+
+	function handleManualEntry() {
+		const placeholder = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%231e293b" width="200" height="200"/><text x="50%" y="50%" fill="%2364748b" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">📦</text></svg>');
+		measuredDims = { l: 0, w: 0, h: 0 };
+		finalPhoto = placeholder;
+		flowStep = 'form';
+	}
 </script>
 
 {#if editingItem}
 	<ItemDetail item={editingItem} onClose={() => editingId = null} />
+{/if}
+
+{#if showAddFlow}
+	<div class="add-overlay">
+		{#if flowStep === 'capture'}
+			<div class="add-overlay-header">
+				<button class="overlay-close" onclick={closeAddFlow} aria-label="Close">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+				</button>
+				<h2>Add Item</h2>
+				<div style="width: 32px"></div>
+			</div>
+			<div class="capture-area">
+				<CameraCapture onCapture={handleCapture} />
+				<div class="or-divider"><span>or</span></div>
+				<button class="manual-btn" onclick={handleManualEntry}>
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+					Add Manually
+				</button>
+			</div>
+		{:else if flowStep === 'measure' && photoUrl}
+			<MeasurementCanvas
+				{photoUrl}
+				onComplete={handleMeasureComplete}
+				onCancel={() => { photoUrl = null; flowStep = 'capture'; }}
+			/>
+		{:else if flowStep === 'form' && measuredDims && finalPhoto}
+			<ItemForm
+				photo={finalPhoto}
+				dimensions={measuredDims}
+				onBack={() => { flowStep = 'measure'; }}
+				onSaved={closeAddFlow}
+			/>
+		{/if}
+	</div>
 {/if}
 
 <div class="inventory">
@@ -67,7 +146,7 @@
 			{#if items.length === 0}
 				<div class="empty-icon">📦</div>
 				<h3>No items yet</h3>
-				<p>Tap <strong>Add Item</strong> to photograph and measure your first item</p>
+				<p>Tap the <strong>+</strong> button to photograph and measure your first item</p>
 			{:else}
 				<p>No items in this category</p>
 			{/if}
@@ -83,9 +162,110 @@
 			{/each}
 		</div>
 	{/if}
+
+	<button class="fab" onclick={openAddFlow} aria-label="Add item">
+		<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+			<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+		</svg>
+	</button>
 </div>
 
 <style>
+	/* Add item overlay */
+	.add-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 200;
+		background: var(--color-bg);
+		display: flex;
+		flex-direction: column;
+	}
+
+	.add-overlay-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.add-overlay-header h2 {
+		font-size: 17px;
+		font-weight: 600;
+	}
+
+	.overlay-close {
+		padding: 6px;
+		color: var(--color-text-secondary);
+	}
+
+	.capture-area {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0;
+	}
+
+	.or-divider {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		width: 200px;
+		color: var(--color-text-muted);
+		font-size: 13px;
+	}
+
+	.or-divider::before,
+	.or-divider::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--color-border);
+	}
+
+	.manual-btn {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 24px;
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		transition: all 0.15s;
+	}
+
+	.manual-btn:active {
+		background: var(--color-bg-elevated);
+	}
+
+	/* FAB */
+	.fab {
+		position: fixed;
+		bottom: calc(var(--tab-bar-height) + 8px);
+		right: 20px;
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		background: var(--color-accent);
+		color: var(--color-accent-fg);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+		z-index: 40;
+		transition: transform 0.15s, box-shadow 0.15s;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.fab:active {
+		transform: scale(0.92);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	}
+
 	.inventory {
 		padding: 0 16px 24px;
 	}
