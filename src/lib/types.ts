@@ -32,8 +32,12 @@ export interface InventoryItem {
 	fragile: boolean;
 	stackable: boolean;
 	forSale: boolean;
+	/** Marked for donation (e.g. not keeping after move) */
+	donate: boolean;
 	modelUrl?: string; // GLB URL from TripoSR server, if generated
 	contents: string[];
+	/** `null` or omitted = General (not tied to a room) */
+	room?: string | null;
 	notes?: string;
 	createdAt: number;
 }
@@ -43,6 +47,8 @@ export interface TrailerPreset {
 	length: number; // feet
 	width: number;
 	height: number;
+	/** Typical usable payload (lbs) for load planning */
+	payloadLbs: number;
 }
 
 export interface PackedItem {

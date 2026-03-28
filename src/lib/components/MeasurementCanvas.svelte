@@ -153,7 +153,7 @@
 	}
 
 	function drawMeasurementOverlay(ctx: CanvasRenderingContext2D) {
-		const colors: Record<DimKey, string> = { length: '#3b82f6', width: '#f59e0b', height: '#ef4444' };
+		const colors: Record<DimKey, string> = { length: '#c4c4c4', width: '#8c8c8c', height: '#6b6b6b' };
 
 		for (const key of ['length', 'width', 'height'] as DimKey[]) {
 			const pts = measurePoints[key];
@@ -345,7 +345,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 12px 16px;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-divider);
 	}
 
 	.toolbar-btn {
@@ -396,7 +396,7 @@
 		gap: 8px;
 		padding: 12px 16px;
 		background: var(--color-bg-card);
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-divider);
 	}
 
 	.dim-pill {
@@ -406,19 +406,21 @@
 		align-items: center;
 		gap: 2px;
 		padding: 8px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
-		transition: all 0.15s;
+		border-radius: var(--radius-md);
+		border: none;
+		background: var(--color-bg);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+		transition: background 0.2s ease, box-shadow 0.2s ease;
 	}
 
 	.dim-pill.active {
-		border-color: #525252;
 		background: var(--color-bg-elevated);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 	}
 
 	.dim-pill.done {
-		border-color: var(--color-success);
 		background: var(--color-success-soft);
+		box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.35);
 	}
 
 	.dim-label {

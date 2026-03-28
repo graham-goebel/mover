@@ -4,6 +4,10 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
+	import type { RoomPresetId } from '$lib/utils/rooms';
+	import { roomFromPresetAndCustom } from '$lib/utils/rooms';
+	import RoomPicker from './RoomPicker.svelte';
+	import ItemFlagsDropdown from './ItemFlagsDropdown.svelte';
 
 	interface Props {
 		photo: string;
@@ -17,10 +21,14 @@
 	let name = $state('');
 	let category = $state<ItemCategory>('box');
 	let shape = $state<ItemShape>('box');
+	let forSale = $state(false);
 	let fragile = $state(false);
 	let stackable = $state(true);
+	let donate = $state(false);
 	let weight = $state(0);
 	let notes = $state('');
+	let roomPreset = $state<RoomPresetId>('general');
+	let roomCustom = $state('');
 
 	const categories: { value: ItemCategory; label: string; icon: string }[] = [
 		{ value: 'box', label: 'Box', icon: '📦' },
@@ -47,6 +55,9 @@
 			shape,
 			fragile,
 			stackable,
+			forSale,
+			donate,
+			room: roomFromPresetAndCustom(roomPreset, roomCustom),
 			contents: [],
 			notes: notes || undefined
 		});
@@ -68,19 +79,12 @@
 	</div>
 
 	<div class="form-body">
-		<div class="photo-dims">
-			<div class="mini-photo">
-				<img src={photo} alt="Item" />
-			</div>
-			<div class="dims-display">
-				<span class="dim-val">{dimensions.l}″ × {dimensions.w}″ × {dimensions.h}″</span>
-			</div>
-		</div>
-
 		<div class="field">
 			<label for="new-name">Item Name</label>
 			<input id="new-name" type="text" bind:value={name} placeholder="e.g. Kitchen box, Couch, TV…" />
 		</div>
+
+		<RoomPicker bind:preset={roomPreset} bind:custom={roomCustom} fieldId="new-item-room" />
 
 		<div class="field">
 			<span class="field-label">Category</span>
@@ -107,23 +111,27 @@
 			</select>
 		</div>
 
+		<div class="photo-dims">
+			<div class="mini-photo">
+				<img src={photo} alt="Item" />
+			</div>
+			<div class="dims-display">
+				<span class="dim-val">{dimensions.l}″ × {dimensions.w}″ × {dimensions.h}″</span>
+			</div>
+		</div>
+
 		<div class="field">
 			<label for="new-weight">Weight (lbs, optional)</label>
 			<input id="new-weight" type="number" bind:value={weight} min="0" step="1" inputmode="numeric" placeholder="0" />
 		</div>
 
-		<div class="toggles">
-			<label class="toggle-row">
-				<span>Fragile</span>
-				<input type="checkbox" bind:checked={fragile} />
-				<span class="toggle-track"></span>
-			</label>
-			<label class="toggle-row">
-				<span>Stackable</span>
-				<input type="checkbox" bind:checked={stackable} />
-				<span class="toggle-track"></span>
-			</label>
-		</div>
+		<ItemFlagsDropdown
+			bind:forSale
+			bind:fragile
+			bind:stackable
+			bind:donate
+			fieldId="form-item-flags"
+		/>
 
 		<div class="field">
 			<label for="new-notes">Notes (optional)</label>
@@ -148,7 +156,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 12px 16px;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-divider);
 	}
 
 	.form-header h2 {
@@ -240,14 +248,15 @@
 		align-items: center;
 		gap: 4px;
 		padding: 10px 8px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		transition: all 0.15s;
+		border: none;
+		border-radius: var(--radius-md);
+		background: var(--color-bg-card);
+		transition: background 0.2s ease, box-shadow 0.2s ease;
 	}
 
 	.cat-btn.active {
-		border-color: #525252;
 		background: var(--color-bg-elevated);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 	}
 
 	.cat-icon { font-size: 20px; }
@@ -258,49 +267,6 @@
 		cursor: pointer;
 		color-scheme: dark;
 	}
-
-	.toggles {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.toggle-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 12px 14px;
-		background: var(--color-bg-card);
-		border-radius: var(--radius-sm);
-		font-size: 15px;
-		cursor: pointer;
-	}
-
-	.toggle-row input { display: none; }
-
-	.toggle-track {
-		width: 44px;
-		height: 26px;
-		background: var(--color-bg-elevated);
-		border-radius: 13px;
-		position: relative;
-		transition: background 0.2s;
-	}
-
-	.toggle-track::after {
-		content: '';
-		position: absolute;
-		top: 3px;
-		left: 3px;
-		width: 20px;
-		height: 20px;
-		background: #a3a3a3;
-		border-radius: 50%;
-		transition: transform 0.2s, background 0.2s;
-	}
-
-	.toggle-row input:checked + .toggle-track { background: var(--color-accent); }
-	.toggle-row input:checked + .toggle-track::after { transform: translateX(18px); background: var(--color-accent-fg); }
 
 	textarea {
 		resize: vertical;

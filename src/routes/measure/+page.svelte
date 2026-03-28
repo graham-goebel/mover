@@ -32,7 +32,7 @@
 	}
 
 	function handleManualEntry() {
-		const placeholder = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="#1e293b" width="200" height="200"/><text x="50%" y="50%" fill="#64748b" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">&#x1F4E6;</text></svg>');
+		const placeholder = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="#1a1a1a" width="200" height="200"/><text x="50%" y="50%" fill="#737373" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">&#x1F4E6;</text></svg>');
 		measuredDims = { l: 0, w: 0, h: 0 };
 		finalPhoto = placeholder;
 		flowStep = 'form';
@@ -126,9 +126,11 @@
 		font-size: 15px;
 		font-weight: 600;
 		color: var(--color-text-secondary);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		transition: all 0.15s;
+		border: none;
+		border-radius: var(--radius-lg);
+		background: var(--color-bg-card);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+		transition: background 0.2s ease;
 	}
 
 	.manual-btn:active {

@@ -5,6 +5,10 @@
 	import { untrack } from 'svelte';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 	import ContentsEditor from './ContentsEditor.svelte';
+	import type { RoomPresetId } from '$lib/utils/rooms';
+	import { roomFromPresetAndCustom, splitStoredRoom } from '$lib/utils/rooms';
+	import RoomPicker from './RoomPicker.svelte';
+	import ItemFlagsDropdown from './ItemFlagsDropdown.svelte';
 
 	interface Props {
 		item: InventoryItem;
@@ -14,6 +18,7 @@
 	let { item, onClose }: Props = $props();
 
 	function initFrom(it: InventoryItem) {
+		const r = splitStoredRoom(it.room);
 		return {
 			name: it.name,
 			l: it.dimensions.l,
@@ -22,9 +27,13 @@
 			weight: it.weight ?? 0,
 			category: it.category as ItemCategory,
 			shape: (it.shape ?? CATEGORY_DEFAULT_SHAPE[it.category] ?? 'generic') as ItemShape,
+			forSale: it.forSale ?? false,
 			fragile: it.fragile,
 			stackable: it.stackable,
-			notes: it.notes ?? ''
+			donate: it.donate ?? false,
+			notes: it.notes ?? '',
+			roomPreset: r.preset,
+			roomCustom: r.custom
 		};
 	}
 
@@ -36,9 +45,13 @@
 	let weight = $state(init.weight);
 	let category = $state<ItemCategory>(init.category);
 	let shape = $state<ItemShape>(init.shape);
+	let forSale = $state(init.forSale);
 	let fragile = $state(init.fragile);
 	let stackable = $state(init.stackable);
+	let donate = $state(init.donate);
 	let notes = $state(init.notes);
+	let roomPreset = $state<RoomPresetId>(init.roomPreset);
+	let roomCustom = $state(init.roomCustom);
 	let showDeleteConfirm = $state(false);
 
 	const categories: { value: ItemCategory; label: string; icon: string }[] = [
@@ -62,8 +75,11 @@
 			weight: weight || undefined,
 			category,
 			shape,
+			forSale,
 			fragile,
 			stackable,
+			donate,
+			room: roomFromPresetAndCustom(roomPreset, roomCustom),
 			notes: notes || undefined
 		});
 		onClose();
@@ -99,6 +115,24 @@
 				<input id="item-name" type="text" bind:value={name} />
 			</div>
 
+			<RoomPicker bind:preset={roomPreset} bind:custom={roomCustom} fieldId="detail-room" />
+
+			<div class="field">
+				<span class="field-label">Category</span>
+				<div class="cat-grid">
+					{#each categories as cat}
+						<button
+							class="cat-btn"
+							class:active={category === cat.value}
+							onclick={() => setCategory(cat.value)}
+						>
+							<span class="cat-icon">{cat.icon}</span>
+							<span class="cat-label">{cat.label}</span>
+						</button>
+					{/each}
+				</div>
+			</div>
+
 			<div class="field">
 				<span class="field-label">Dimensions</span>
 				<div class="dims-row">
@@ -126,22 +160,6 @@
 			</div>
 
 			<div class="field">
-				<span class="field-label">Category</span>
-				<div class="cat-grid">
-					{#each categories as cat}
-						<button
-							class="cat-btn"
-							class:active={category === cat.value}
-							onclick={() => setCategory(cat.value)}
-						>
-							<span class="cat-icon">{cat.icon}</span>
-							<span class="cat-label">{cat.label}</span>
-						</button>
-					{/each}
-				</div>
-			</div>
-
-			<div class="field">
 				<label class="field-label" for="detail-item-shape">3D Shape</label>
 				<select id="detail-item-shape" class="shape-select" bind:value={shape}>
 					{#each SHAPE_OPTIONS as s}
@@ -150,18 +168,13 @@
 				</select>
 			</div>
 
-			<div class="toggles">
-				<label class="toggle-row">
-					<span>Fragile</span>
-					<input type="checkbox" bind:checked={fragile} />
-					<span class="toggle-track"></span>
-				</label>
-				<label class="toggle-row">
-					<span>Stackable</span>
-					<input type="checkbox" bind:checked={stackable} />
-					<span class="toggle-track"></span>
-				</label>
-			</div>
+			<ItemFlagsDropdown
+				bind:forSale
+				bind:fragile
+				bind:stackable
+				bind:donate
+				fieldId="detail-item-flags"
+			/>
 
 			<ContentsEditor itemId={item.id} contents={item.contents} />
 
@@ -205,7 +218,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 12px 16px;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-divider);
 		position: sticky;
 		top: 0;
 		background: var(--color-bg);
@@ -315,14 +328,15 @@
 		align-items: center;
 		gap: 4px;
 		padding: 10px 8px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		transition: all 0.15s;
+		border: none;
+		border-radius: var(--radius-md);
+		background: var(--color-bg-card);
+		transition: background 0.2s ease, box-shadow 0.2s ease;
 	}
 
 	.cat-btn.active {
-		border-color: #525252;
 		background: var(--color-bg-elevated);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 	}
 
 	.cat-icon {
@@ -340,57 +354,6 @@
 		color-scheme: dark;
 	}
 
-	.toggles {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
-
-	.toggle-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 12px 14px;
-		background: var(--color-bg-card);
-		border-radius: var(--radius-sm);
-		font-size: 15px;
-		cursor: pointer;
-	}
-
-	.toggle-row input {
-		display: none;
-	}
-
-	.toggle-track {
-		width: 44px;
-		height: 26px;
-		background: var(--color-bg-elevated);
-		border-radius: 13px;
-		position: relative;
-		transition: background 0.2s;
-	}
-
-	.toggle-track::after {
-		content: '';
-		position: absolute;
-		top: 3px;
-		left: 3px;
-		width: 20px;
-		height: 20px;
-		background: #a3a3a3;
-		border-radius: 50%;
-		transition: transform 0.2s, background 0.2s;
-	}
-
-	.toggle-row input:checked + .toggle-track {
-		background: var(--color-accent);
-	}
-
-	.toggle-row input:checked + .toggle-track::after {
-		transform: translateX(18px);
-		background: var(--color-accent-fg);
-	}
-
 	textarea {
 		resize: vertical;
 		min-height: 60px;
@@ -398,7 +361,7 @@
 
 	.danger-zone {
 		padding-top: 12px;
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-divider);
 	}
 
 	.delete-btn {
@@ -407,13 +370,14 @@
 		color: var(--color-danger);
 		font-size: 15px;
 		font-weight: 600;
-		border: 1px solid var(--color-danger);
+		border: none;
 		border-radius: var(--radius-md);
-		transition: all 0.15s;
+		background: var(--color-danger-soft);
+		transition: background 0.15s;
 	}
 
 	.delete-btn:active {
-		background: var(--color-danger-soft);
+		background: rgba(239, 68, 68, 0.2);
 	}
 
 	.delete-confirm-text {
@@ -437,7 +401,9 @@
 	}
 
 	.cancel-delete {
-		border: 1px solid var(--color-border);
+		border: none;
+		background: var(--color-bg-elevated);
+		color: var(--color-text-primary);
 	}
 
 	.confirm-delete {

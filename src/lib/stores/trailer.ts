@@ -2,20 +2,38 @@ import { writable, derived } from 'svelte/store';
 import type { TrailerPreset, PackResult } from '$lib/types';
 
 export const TRAILER_PRESETS: TrailerPreset[] = [
-	{ name: 'Cargo Van', length: 10, width: 5.5, height: 4.5 },
-	{ name: 'Small Trailer (5×8)', length: 8, width: 5, height: 5 },
-	{ name: 'Medium Trailer (6×12)', length: 12, width: 6, height: 6.5 },
-	{ name: 'Large Trailer (8.5×20)', length: 20, width: 8, height: 8 },
-	{ name: '26ft Box Truck', length: 26, width: 8, height: 8 }
+	{ name: 'Cargo Van', length: 10, width: 5.5, height: 4.5, payloadLbs: 1500 },
+	{ name: 'Small Trailer (5×8)', length: 8, width: 5, height: 5, payloadLbs: 2000 },
+	{ name: 'Medium Trailer (6×12)', length: 12, width: 6, height: 6.5, payloadLbs: 2900 },
+	{ name: 'Large Trailer (8.5×20)', length: 20, width: 8, height: 8, payloadLbs: 7000 },
+	{ name: '26ft Box Truck', length: 26, width: 8, height: 8, payloadLbs: 12000 }
 ];
 
 const STORAGE_KEY = 'mover_trailer';
+const DEFAULT_CUSTOM_PAYLOAD = 2500;
+
+function migrateTrailer(raw: TrailerPreset): TrailerPreset {
+	const pl = raw.payloadLbs;
+	if (raw.name === 'Custom') {
+		return {
+			...raw,
+			payloadLbs: typeof pl === 'number' && pl > 0 ? pl : DEFAULT_CUSTOM_PAYLOAD
+		};
+	}
+	const match = TRAILER_PRESETS.find((p) => p.name === raw.name);
+	const fallback = match ?? TRAILER_PRESETS[2];
+	return {
+		...raw,
+		payloadLbs: typeof pl === 'number' && pl > 0 ? pl : fallback.payloadLbs
+	};
+}
 
 function loadTrailer(): TrailerPreset {
 	if (typeof localStorage === 'undefined') return TRAILER_PRESETS[2];
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
-		return raw ? JSON.parse(raw) : TRAILER_PRESETS[2];
+		if (!raw) return TRAILER_PRESETS[2];
+		return migrateTrailer(JSON.parse(raw) as TrailerPreset);
 	} catch {
 		return TRAILER_PRESETS[2];
 	}
@@ -33,7 +51,13 @@ function createTrailerStore() {
 			set(preset);
 		},
 		setCustom(length: number, width: number, height: number) {
-			const custom: TrailerPreset = { name: 'Custom', length, width, height };
+			const custom: TrailerPreset = {
+				name: 'Custom',
+				length,
+				width,
+				height,
+				payloadLbs: DEFAULT_CUSTOM_PAYLOAD
+			};
 			if (typeof localStorage !== 'undefined') {
 				localStorage.setItem(STORAGE_KEY, JSON.stringify(custom));
 			}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { theme, moveDate, settingsOpen } from '$lib/stores/app';
+	import { theme, moveDate, moveRoute, settingsOpen } from '$lib/stores/app';
 
 	function close() {
 		settingsOpen.set(false);
@@ -20,22 +20,65 @@
 	function toggleTheme() {
 		theme.set($theme === 'light' ? 'dark' : 'light');
 	}
+
+	let routeOrigin = $state('');
+	let routeDestination = $state('');
+	let routeMilesStr = $state('');
+
+	$effect(() => {
+		routeOrigin = $moveRoute.origin;
+		routeDestination = $moveRoute.destination;
+		routeMilesStr = $moveRoute.miles != null ? String($moveRoute.miles) : '';
+	});
+
+	function saveRouteOrigin(e: Event) {
+		const v = (e.currentTarget as HTMLInputElement).value;
+		moveRoute.update((r) => ({ ...r, origin: v }));
+	}
+
+	function saveRouteDestination(e: Event) {
+		const v = (e.currentTarget as HTMLInputElement).value;
+		moveRoute.update((r) => ({ ...r, destination: v }));
+	}
+
+	function saveRouteMiles(e: Event) {
+		const raw = (e.currentTarget as HTMLInputElement).value.trim();
+		if (raw === '') {
+			moveRoute.update((r) => ({ ...r, miles: null }));
+			return;
+		}
+		const n = parseFloat(raw);
+		if (!Number.isFinite(n) || n < 0) {
+			moveRoute.update((r) => ({ ...r, miles: null }));
+			routeMilesStr = '';
+			return;
+		}
+		const miles = Math.round(n * 10) / 10;
+		moveRoute.update((r) => ({ ...r, miles }));
+	}
+
+	$effect(() => {
+		if (!$settingsOpen) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') close();
+		};
+		document.addEventListener('keydown', onKey);
+		return () => document.removeEventListener('keydown', onKey);
+	});
 </script>
 
 {#if $settingsOpen}
-	<!-- Backdrop -->
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="settings-backdrop" onclick={close}></div>
+	<div class="settings-root">
+		<button type="button" class="settings-backdrop" onclick={close} aria-label="Close settings"></button>
 
-	<!-- Sheet -->
-	<div class="settings-sheet animate-slide">
-		<!-- Drag pill -->
-		<div class="sheet-pill-wrap">
-			<div class="sheet-pill"></div>
-		</div>
-
+		<div
+			class="settings-modal animate-scale"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="settings-modal-title"
+		>
 		<div class="settings-header">
-			<h2>Settings</h2>
+			<h2 id="settings-modal-title">Settings</h2>
 			<button class="close-btn" onclick={close} aria-label="Close settings">
 				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
 					<line x1="18" y1="6" x2="6" y2="18"/>
@@ -112,59 +155,113 @@
 					aria-label="Move date"
 				/>
 			</div>
+
+			<div class="settings-divider"></div>
+
+			<div class="settings-section-label">Move route</div>
+			<p class="settings-section-hint">Shown on Overview — add labels and driving miles.</p>
+
+			<div class="settings-stack">
+				<label class="stack-label" for="route-origin">Starting from</label>
+				<input
+					id="route-origin"
+					type="text"
+					class="stack-input"
+					placeholder="e.g. 123 Main St, Austin"
+					value={routeOrigin}
+					oninput={saveRouteOrigin}
+					autocomplete="street-address"
+				/>
+			</div>
+
+			<div class="settings-stack">
+				<label class="stack-label" for="route-dest">Moving to</label>
+				<input
+					id="route-dest"
+					type="text"
+					class="stack-input"
+					placeholder="e.g. Denver, CO"
+					value={routeDestination}
+					oninput={saveRouteDestination}
+					autocomplete="off"
+				/>
+			</div>
+
+			<div class="settings-stack">
+				<label class="stack-label" for="route-miles">Distance (miles)</label>
+				<input
+					id="route-miles"
+					type="text"
+					inputmode="decimal"
+					class="stack-input"
+					placeholder="e.g. 920"
+					value={routeMilesStr}
+					oninput={(e) => (routeMilesStr = (e.currentTarget as HTMLInputElement).value)}
+					onchange={saveRouteMiles}
+					aria-describedby="route-miles-hint"
+				/>
+				<p id="route-miles-hint" class="stack-hint">Driving distance between the two places.</p>
+			</div>
+		</div>
 		</div>
 	</div>
 {/if}
 
 <style>
-	/* ── Backdrop ───────────────────────────────────────────────────────────── */
-	.settings-backdrop {
+	.settings-root {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
 		z-index: 300;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: max(12px, env(safe-area-inset-top, 0px)) 20px max(12px, env(safe-area-inset-bottom, 0px));
+		pointer-events: none;
+	}
+
+	.settings-root > * {
+		pointer-events: auto;
+	}
+
+	.settings-backdrop {
+		position: absolute;
+		inset: 0;
+		border: none;
+		padding: 0;
+		margin: 0;
+		cursor: pointer;
+		background: rgba(0, 0, 0, 0.55);
 		animation: backdrop-in 0.2s ease forwards;
+		pointer-events: auto;
 	}
 
 	@keyframes backdrop-in {
 		from { opacity: 0; }
-		to   { opacity: 1; }
+		to { opacity: 1; }
 	}
 
-	/* ── Sheet ──────────────────────────────────────────────────────────────── */
-	.settings-sheet {
-		position: fixed;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		z-index: 301;
-		background: var(--color-bg-elevated);
-		border-radius: 20px 20px 0 0;
-		padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-		box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.4);
-	}
-
-	/* ── Handle pill ────────────────────────────────────────────────────────── */
-	.sheet-pill-wrap {
+	.settings-modal {
+		position: relative;
+		z-index: 1;
+		width: 100%;
+		max-width: 420px;
+		max-height: min(88dvh, 720px);
 		display: flex;
-		justify-content: center;
-		padding: 12px 0 4px;
+		flex-direction: column;
+		background: var(--color-bg-elevated);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-lg), 0 0 0 1px var(--color-border-subtle);
+		overflow: hidden;
+		pointer-events: auto;
 	}
 
-	.sheet-pill {
-		width: 36px;
-		height: 4px;
-		background: var(--color-border);
-		border-radius: 100px;
-	}
-
-	/* ── Header ─────────────────────────────────────────────────────────────── */
 	.settings-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 4px 20px 16px;
-		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+		padding: 16px 20px 14px;
+		border-bottom: 1px solid var(--color-divider);
 	}
 
 	.settings-header h2 {
@@ -187,9 +284,12 @@
 
 	.close-btn:active { background: var(--color-border); }
 
-	/* ── Body ───────────────────────────────────────────────────────────────── */
 	.settings-body {
-		padding: 8px 0;
+		padding: 8px 0 16px;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		flex: 1;
+		min-height: 0;
 	}
 
 	/* ── Row ────────────────────────────────────────────────────────────────── */
@@ -241,7 +341,7 @@
 
 	.settings-divider {
 		height: 1px;
-		background: var(--color-border);
+		background: var(--color-divider);
 		margin: 4px 20px;
 	}
 
@@ -282,16 +382,79 @@
 		font-size: 14px;
 		padding: 8px 12px;
 		background: var(--color-bg-input);
-		border: 1px solid var(--color-border);
+		border: none;
 		border-radius: var(--radius-md);
 		color: var(--color-text);
 		flex-shrink: 0;
 		width: 150px;
 		text-align: right;
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+		transition: box-shadow 0.2s ease;
 	}
 
 	.date-input:focus {
-		border-color: var(--color-text-muted);
 		outline: none;
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+	}
+
+	:global([data-theme='light']) .date-input:focus {
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+	}
+
+	.settings-section-label {
+		padding: 8px 20px 0;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.settings-section-hint {
+		padding: 4px 20px 8px;
+		margin: 0;
+		font-size: 12px;
+		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+
+	.settings-stack {
+		padding: 0 20px 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.stack-label {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+	}
+
+	.stack-input {
+		width: 100%;
+		font-size: 15px;
+		padding: 12px 14px;
+		background: var(--color-bg-input);
+		border: none;
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+		outline: none;
+	}
+
+	.stack-input:focus {
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+	}
+
+	:global([data-theme='light']) .stack-input:focus {
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+	}
+
+	.stack-hint {
+		margin: 0;
+		font-size: 11px;
+		color: var(--color-text-muted);
+		line-height: 1.35;
 	}
 </style>

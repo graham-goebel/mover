@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PackedItem, TrailerPreset, PackResult, InventoryItem } from '$lib/types';
-	import { trailer, packResult, loadOrderStep } from '$lib/stores/trailer';
+	import { trailer, packResult, loadOrderStep, TRAILER_PRESETS } from '$lib/stores/trailer';
 	import { inventory } from '$lib/stores/inventory';
 	import { packItems } from '$lib/utils/packing';
 	import { SHAPE_OPTIONS } from '$lib/utils/shapes';
@@ -9,7 +9,7 @@
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
 	import BottomSheet from '$lib/components/BottomSheet.svelte';
 
-	let currentTrailer = $state<TrailerPreset>({ name: '', length: 12, width: 6, height: 6.5 });
+	let currentTrailer = $state<TrailerPreset>({ ...TRAILER_PRESETS[2] });
 	let result = $state<PackResult | null>(null);
 	let step = $state(0);
 	let selectedItemId = $state<string | null>(null);
@@ -220,6 +220,12 @@
 					</div>
 
 					<div class="detail-badges">
+						{#if item.forSale}
+							<span class="badge badge-sale">💲 For Sale</span>
+						{/if}
+						{#if item.donate}
+							<span class="badge badge-donate">📦 Donate</span>
+						{/if}
 						{#if item.fragile}
 							<span class="badge badge-warn">⚠️ Fragile</span>
 						{/if}
@@ -383,6 +389,12 @@
 					</div>
 
 					<div class="detail-badges">
+						{#if item.forSale}
+							<span class="badge badge-sale">💲 For Sale</span>
+						{/if}
+						{#if item.donate}
+							<span class="badge badge-donate">📦 Donate</span>
+						{/if}
 						{#if item.fragile}
 							<span class="badge badge-warn">⚠️ Fragile</span>
 						{/if}
@@ -462,18 +474,24 @@
 		display: contents;
 	}
 
-	/* On mobile the BottomSheet handles scroll — panel-scroll must be visible */
+	/* On mobile: panel-scroll IS the scroll container (sheet-body is overflow:hidden) */
 	.panel-scroll {
 		display: flex;
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
-		overflow: hidden;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		overscroll-behavior: contain;
 	}
 
 	.packer-header {
-		padding: 16px;
+		padding: 0 16px;
 		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		/* Height = peekHeight(80) - handle(22) so text centres in the visible mini-card */
+		height: 58px;
 	}
 
 	.packer-header h1 {
@@ -493,11 +511,11 @@
 		flex: 1;
 		min-height: 250px;
 		position: relative;
-		background: #050505;
+		background: #0a0a0a;
 	}
 
 	.toggle-panel {
-		display: flex;
+		display: none; /* hidden on mobile — controls are always in the sheet */
 		align-items: center;
 		justify-content: center;
 		gap: 6px;
@@ -506,7 +524,7 @@
 		font-weight: 600;
 		color: var(--color-text-secondary);
 		background: var(--color-bg-card);
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-divider);
 	}
 
 	.controls-panel {
@@ -516,7 +534,7 @@
 	/* Selected item detail card */
 	.detail-card {
 		padding: 16px;
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-divider);
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
@@ -614,6 +632,16 @@
 		color: var(--color-success);
 	}
 
+	.badge-sale {
+		background: rgba(255, 255, 255, 0.08);
+		color: #d4d4d4;
+	}
+
+	.badge-donate {
+		background: rgba(255, 255, 255, 0.06);
+		color: #a3a3a3;
+	}
+
 	.detail-section {
 		display: flex;
 		flex-direction: column;
@@ -662,10 +690,13 @@
 		max-width: 340px;
 		max-height: 50%;
 		overflow-y: auto;
-		padding: 10px 12px;
-		background: rgba(23, 23, 23, 0.85);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
+		padding: 12px 14px;
+		background: rgba(28, 28, 33, 0.92);
+		border: none;
+		border-radius: var(--radius-lg);
+		box-shadow:
+			0 0 0 1px var(--color-border-subtle),
+			0 16px 48px rgba(0, 0, 0, 0.45);
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
 		z-index: 10;
@@ -743,10 +774,12 @@
 	/* Inventory sidebar list */
 	/* Accordion */
 	.accordion {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border: none;
+		border-radius: var(--radius-lg);
 		margin: 0 16px;
 		overflow: hidden;
+		background: var(--color-bg-card);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 	}
 
 	.accordion-trigger {
@@ -798,14 +831,15 @@
 		font-size: 11px;
 		font-weight: 600;
 		color: var(--color-accent);
-		padding: 4px 10px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		transition: all 0.15s;
+		padding: 6px 12px;
+		border: none;
+		border-radius: var(--radius-pill);
+		background: var(--color-bg-elevated);
+		transition: background 0.2s ease;
 	}
 
 	.add-all-btn:active {
-		background: var(--color-bg-elevated);
+		background: var(--color-bg-card);
 	}
 
 	.section-label {
@@ -904,7 +938,7 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		background: var(--color-bg);
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-divider);
 	}
 
 	/* ---- Desktop: side-by-side ---- */
@@ -919,9 +953,9 @@
 		.left-panel {
 			display: flex;
 			flex-direction: column;
-			width: 360px;
+			width: var(--sidebar-width);
 			flex-shrink: 0;
-			border-right: 1px solid var(--color-border);
+			border-right: 1px solid var(--color-divider);
 			background: var(--color-bg);
 			overflow: hidden;
 		}
@@ -942,7 +976,7 @@
 		}
 
 		.controls-panel {
-			border-top: 1px solid var(--color-border);
+			border-top: 1px solid var(--color-divider);
 		}
 	}
 </style>

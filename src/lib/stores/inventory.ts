@@ -4,11 +4,25 @@ import { createId } from '$lib/utils/id';
 
 const STORAGE_KEY = 'mover_inventory';
 
+/** Ensure new boolean fields exist on items loaded from older localStorage / JSON */
+function migrateItem(it: InventoryItem): InventoryItem {
+	return {
+		...it,
+		donate: Boolean(it.donate),
+		forSale: Boolean(it.forSale),
+		fragile: Boolean(it.fragile),
+		stackable: it.stackable !== false
+	};
+}
+
 function load(): InventoryItem[] {
 	if (typeof localStorage === 'undefined') return [];
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
-		return raw ? JSON.parse(raw) : [];
+		if (!raw) return [];
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return [];
+		return parsed.map((row) => migrateItem(row as InventoryItem));
 	} catch {
 		return [];
 	}
@@ -98,7 +112,9 @@ function createInventoryStore() {
 
 		importJSON(json: string) {
 			try {
-				const items: InventoryItem[] = JSON.parse(json);
+				const parsed: unknown = JSON.parse(json);
+				if (!Array.isArray(parsed)) throw new Error('Invalid JSON');
+				const items = parsed.map((row) => migrateItem(row as InventoryItem));
 				save(items);
 				set(items);
 			} catch {

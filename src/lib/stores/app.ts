@@ -68,6 +68,71 @@ function createMoveDateStore() {
 export const moveDate = createMoveDateStore();
 
 // ---------------------------------------------------------------------------
+// Move route (origin / destination labels + miles) — for Overview map
+// ---------------------------------------------------------------------------
+export type MoveRoute = {
+	origin: string;
+	destination: string;
+	/** Driving distance in miles; user-entered or null */
+	miles: number | null;
+};
+
+const MOVE_ROUTE_KEY = 'mover_move_route';
+
+function loadMoveRoute(): MoveRoute {
+	if (typeof localStorage === 'undefined') {
+		return { origin: '', destination: '', miles: null };
+	}
+	try {
+		const raw = localStorage.getItem(MOVE_ROUTE_KEY);
+		if (!raw) return { origin: '', destination: '', miles: null };
+		const p = JSON.parse(raw) as Record<string, unknown>;
+		const milesRaw = p.miles;
+		let miles: number | null = null;
+		if (typeof milesRaw === 'number' && Number.isFinite(milesRaw) && milesRaw >= 0) {
+			miles = milesRaw;
+		} else if (typeof milesRaw === 'string' && milesRaw.trim() !== '') {
+			const n = parseFloat(milesRaw);
+			if (Number.isFinite(n) && n >= 0) miles = n;
+		}
+		return {
+			origin: typeof p.origin === 'string' ? p.origin : '',
+			destination: typeof p.destination === 'string' ? p.destination : '',
+			miles
+		};
+	} catch {
+		return { origin: '', destination: '', miles: null };
+	}
+}
+
+function createMoveRouteStore() {
+	const { subscribe, set: _set, update: _update } = writable<MoveRoute>(loadMoveRoute());
+
+	function persist(value: MoveRoute) {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(MOVE_ROUTE_KEY, JSON.stringify(value));
+		}
+		_set(value);
+	}
+
+	return {
+		subscribe,
+		set: persist,
+		update(fn: (r: MoveRoute) => MoveRoute) {
+			_update((r) => {
+				const next = fn(r);
+				if (typeof localStorage !== 'undefined') {
+					localStorage.setItem(MOVE_ROUTE_KEY, JSON.stringify(next));
+				}
+				return next;
+			});
+		}
+	};
+}
+
+export const moveRoute = createMoveRouteStore();
+
+// ---------------------------------------------------------------------------
 // Accordion open/closed states — persisted to localStorage
 // ---------------------------------------------------------------------------
 const ACCORDION_KEY = 'mover_accordions';

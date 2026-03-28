@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { InventoryItem } from '$lib/types';
 	import { volumeCuFt } from '$lib/utils/measurement';
+	import { roomDisplayLabel, isGeneralRoom } from '$lib/utils/rooms';
 
 	interface Props {
 		item: InventoryItem;
@@ -77,6 +78,9 @@
 				{#if item.forSale}
 					<span class="badge sale">For Sale</span>
 				{/if}
+				{#if item.donate}
+					<span class="badge donate">Donate</span>
+				{/if}
 				{#if item.fragile}
 					<span class="badge fragile">Fragile</span>
 				{/if}
@@ -85,6 +89,9 @@
 				{item.dimensions.l}″ × {item.dimensions.w}″ × {item.dimensions.h}″
 			</div>
 			<div class="meta">
+				{#if !isGeneralRoom(item.room)}
+					<span class="room-tag">{roomDisplayLabel(item.room)}</span>
+				{/if}
 				<span class="vol">{vol} cu ft</span>
 				{#if item.contents.length > 0}
 					<span class="contents-count">{item.contents.length} items inside</span>
@@ -100,7 +107,7 @@
 	.card-wrapper {
 		position: relative;
 		overflow: hidden;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-lg);
 	}
 
 	.delete-bg {
@@ -111,17 +118,18 @@
 		align-items: center;
 		justify-content: flex-end;
 		padding-right: 24px;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-lg);
 	}
 
 	.card {
 		display: flex;
 		align-items: center;
-		gap: 14px;
+		gap: 16px;
 		width: 100%;
-		padding: 12px;
+		padding: 16px 16px;
+		min-height: 72px;
 		background: var(--color-bg-card);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-lg);
 		text-align: left;
 		position: relative;
 		transition: transform 0.15s;
@@ -132,8 +140,8 @@
 	}
 
 	.thumb {
-		width: 56px;
-		height: 56px;
+		width: 62px;
+		height: 62px;
 		border-radius: var(--radius-sm);
 		overflow: hidden;
 		flex-shrink: 0;
@@ -158,18 +166,20 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 6px;
 	}
 
 	.name-row {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 10px;
 	}
 
 	.name {
 		font-size: 15px;
 		font-weight: 600;
+		letter-spacing: var(--letter-snug);
+		color: var(--color-text-primary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -190,21 +200,43 @@
 	}
 
 	.badge.sale {
-		background: rgba(59, 130, 246, 0.1);
-		color: #3b82f6;
+		background: rgba(255, 255, 255, 0.08);
+		color: #d4d4d4;
+	}
+
+	.badge.donate {
+		background: rgba(255, 255, 255, 0.06);
+		color: #a3a3a3;
 	}
 
 	.dims {
 		font-size: 13px;
 		color: var(--color-text-secondary);
 		font-variant-numeric: tabular-nums;
+		line-height: 1.4;
 	}
 
 	.meta {
 		display: flex;
-		gap: 10px;
+		flex-wrap: wrap;
+		gap: 12px;
+		align-items: center;
 		font-size: 12px;
 		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+
+	.room-tag {
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		background: var(--color-bg-elevated);
+		padding: 2px 8px;
+		border-radius: 100px;
+		max-width: 140px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.category-icon {

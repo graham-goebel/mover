@@ -8,6 +8,7 @@
 	let { children } = $props();
 
 	const tabs = [
+		{ href: `${base}/overview`, label: 'Overview', icon: 'overview' },
 		{ href: `${base}/`, label: 'Inventory', icon: 'inventory' },
 		{ href: `${base}/packer`, label: 'Pack', icon: 'pack' }
 	] as const;

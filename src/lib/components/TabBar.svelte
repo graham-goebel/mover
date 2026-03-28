@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { settingsOpen } from '$lib/stores/app';
-
 	interface Tab {
 		href: string;
 		label: string;
@@ -34,7 +32,14 @@
 		{#each tabs as tab}
 			<a href={tab.href} class="tab" class:active={tab === activeTab}>
 				<div class="tab-icon">
-					{#if tab.icon === 'inventory'}
+					{#if tab.icon === 'overview'}
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+							<rect x="3" y="3" width="7" height="9" rx="1"/>
+							<rect x="14" y="3" width="7" height="5" rx="1"/>
+							<rect x="14" y="12" width="7" height="9" rx="1"/>
+							<rect x="3" y="16" width="7" height="5" rx="1"/>
+						</svg>
+					{:else if tab.icon === 'inventory'}
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
 							<polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
@@ -51,21 +56,6 @@
 				<span class="tab-label">{tab.label}</span>
 			</a>
 		{/each}
-
-		<!-- Settings button — separated by a thin divider -->
-		<div class="tab-divider"></div>
-		<button
-			class="tab settings-tab"
-			onclick={() => settingsOpen.update(v => !v)}
-			aria-label="Settings"
-		>
-			<div class="tab-icon">
-				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-					<circle cx="12" cy="12" r="3"/>
-					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-				</svg>
-			</div>
-		</button>
 	</div>
 </nav>
 
@@ -91,24 +81,23 @@
 		align-items: center;
 		gap: 4px;
 		padding: 6px 8px;
-		background: rgba(255, 255, 255, 0.08);
-		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: rgba(32, 32, 32, 0.78);
+		border: none;
 		border-radius: 22px;
-		backdrop-filter: blur(24px) saturate(1.4);
-		-webkit-backdrop-filter: blur(24px) saturate(1.4);
+		backdrop-filter: blur(28px) saturate(1.2);
+		-webkit-backdrop-filter: blur(28px) saturate(1.2);
 		box-shadow:
-			0 8px 32px rgba(0, 0, 0, 0.4),
-			0 0 0 0.5px rgba(255, 255, 255, 0.05) inset;
+			0 12px 40px rgba(0, 0, 0, 0.35),
+			0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 		pointer-events: auto;
 	}
 
 	/* Light mode: flip glass to white-frosted */
 	:global([data-theme="light"]) .tab-pill {
-		background: rgba(255, 255, 255, 0.75);
-		border-color: rgba(0, 0, 0, 0.08);
+		background: rgba(255, 255, 255, 0.82);
 		box-shadow:
-			0 4px 24px rgba(0, 0, 0, 0.1),
-			0 0 0 0.5px rgba(0, 0, 0, 0.04) inset;
+			0 8px 32px rgba(0, 0, 0, 0.08),
+			0 0 0 1px rgba(0, 0, 0, 0.04) inset;
 	}
 
 	.tab {
@@ -131,13 +120,15 @@
 	}
 
 	.tab.active {
-		color: #fafafa;
-		background: rgba(255, 255, 255, 0.1);
+		color: #f4f4f5;
+		background: rgba(255, 255, 255, 0.12);
+		font-weight: 600;
 	}
 
 	:global([data-theme="light"]) .tab.active {
-		color: #09090b;
-		background: rgba(0, 0, 0, 0.07);
+		color: #18181b;
+		background: rgba(0, 0, 0, 0.06);
+		font-weight: 600;
 	}
 
 	.tab-icon {
@@ -150,35 +141,8 @@
 
 	.tab-label {
 		font-size: 10px;
-		font-weight: 500;
-		letter-spacing: 0.02em;
-	}
-
-	/* Settings button — no label, slightly smaller icon */
-	.settings-tab {
-		padding: 8px 10px;
-		color: rgba(255, 255, 255, 0.35);
-	}
-
-	:global([data-theme="light"]) .settings-tab {
-		color: rgba(0, 0, 0, 0.3);
-	}
-
-	.settings-tab:active {
-		background: rgba(255, 255, 255, 0.08);
-	}
-
-	/* Thin vertical divider before settings button */
-	.tab-divider {
-		width: 1px;
-		height: 20px;
-		background: rgba(255, 255, 255, 0.12);
-		margin: 0 2px;
-		flex-shrink: 0;
-	}
-
-	:global([data-theme="light"]) .tab-divider {
-		background: rgba(0, 0, 0, 0.1);
+		font-weight: 600;
+		letter-spacing: 0.04em;
 	}
 
 	/* Desktop: move back to bottom */

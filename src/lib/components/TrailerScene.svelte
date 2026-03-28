@@ -23,6 +23,8 @@
 	const tw = $derived(trailer.width * 12 * SCALE);
 	const th = $derived(trailer.height * 12 * SCALE);
 
+	const endLabelFontSize = $derived(Math.max(0.048, Math.min(0.11, tl * 0.034)));
+
 	const visibleItems = $derived(
 		loadStep > 0
 			? packedItems.slice(0, loadStep)
@@ -107,6 +109,35 @@
 		<T.PlaneGeometry args={[tl, tw]} />
 		<T.MeshStandardMaterial color="#111111" transparent opacity={0.8} />
 	</T.Mesh>
+
+	<!--
+		Packing uses length along +X in scene coords; lower packing x fills first (toward hitch).
+		Front = hitch / tow vehicle — load heavier items here to reduce fishtail sway.
+	-->
+	<Text
+		text={'FRONT\nHitch · tow vehicle\n(heavier load here)'}
+		fontSize={endLabelFontSize}
+		lineHeight={1.15}
+		color="#fafafa"
+		anchorX="center"
+		anchorY="middle"
+		position={[-tl / 2 + 0.06, th * 0.32, 0]}
+		rotation={[0, Math.PI / 2, 0]}
+		outlineWidth={0.004}
+		outlineColor="#0a0a0a"
+	/>
+	<Text
+		text={'BACK\nRamp / door'}
+		fontSize={endLabelFontSize * 0.95}
+		lineHeight={1.15}
+		color="#a3a3a3"
+		anchorX="center"
+		anchorY="middle"
+		position={[tl / 2 - 0.06, th * 0.32, 0]}
+		rotation={[0, -Math.PI / 2, 0]}
+		outlineWidth={0.004}
+		outlineColor="#0a0a0a"
+	/>
 
 	<!-- Packed items -->
 	{#each visibleItems as packed (packed.item.id)}

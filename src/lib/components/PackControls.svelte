@@ -52,6 +52,56 @@
 		result?.placed.find((p) => p.item.id === selectedItemId) ?? null
 	);
 
+	const CU_IN_PER_CU_FT = 1728;
+
+	/** Trailer interior volume (cu ft) */
+	const containerCuFt = $derived(
+		currentTrailer.length * currentTrailer.width * currentTrailer.height
+	);
+
+	/** Volume occupied by placed items (cu ft) */
+	const usedCuFt = $derived.by(() => {
+		if (!result) return 0;
+		return (
+			result.placed.reduce(
+				(s, p) => s + (p.rotation.l * p.rotation.w * p.rotation.h) / CU_IN_PER_CU_FT,
+				0
+			)
+		);
+	});
+
+	const spaceLeftCuFt = $derived(Math.max(0, containerCuFt - usedCuFt));
+
+	const volBarPct = $derived(
+		result ? Math.min(100, Math.max(0, result.utilization)) : 0
+	);
+
+	const payloadLbs = $derived(Math.max(1, currentTrailer.payloadLbs ?? 2500));
+
+	const placedWeightLbs = $derived.by(() => {
+		if (!result) return 0;
+		return result.placed.reduce((s, p) => s + (p.item.weight ?? 0), 0);
+	});
+
+	const weightUtilPct = $derived(
+		payloadLbs > 0 ? (placedWeightLbs / payloadLbs) * 100 : 0
+	);
+
+	const weightBarPct = $derived(Math.min(100, Math.max(0, weightUtilPct)));
+
+	const weightLeftLbs = $derived(payloadLbs - placedWeightLbs);
+
+	const placedWithoutWeight = $derived.by(() => {
+		if (!result) return 0;
+		return result.placed.filter((p) => p.item.weight == null || p.item.weight <= 0).length;
+	});
+
+	function fmtCuFt(n: number): string {
+		if (n >= 100) return `${Math.round(n)}`;
+		if (n >= 10) return `${Math.round(n * 10) / 10}`;
+		return `${Math.round(n * 10) / 10}`;
+	}
+
 	export function getSelectedId() { return selectedItemId; }
 	export function setSelectedId(id: string | null) { selectedItemId = id; }
 	export function getTrailer() { return currentTrailer; }
@@ -70,9 +120,56 @@
 				<span class="pack-stat-val warn">{result.unplaced.length}</span>
 				<span class="pack-stat-label">Won't fit</span>
 			</div>
-			<div class="pack-stat">
-				<span class="pack-stat-val accent">{result.utilization}%</span>
-				<span class="pack-stat-label">Used</span>
+		</div>
+
+		<div class="pack-bars">
+			<div class="cap-bar-block">
+				<div class="cap-bar-header">
+					<span class="cap-bar-title">Space</span>
+					<span class="cap-bar-meta">
+						{result.utilization}% used · <strong>{fmtCuFt(spaceLeftCuFt)} cu ft</strong> left
+					</span>
+				</div>
+				<div
+					class="cap-bar-track"
+					role="progressbar"
+					aria-valuemin="0"
+					aria-valuemax="100"
+					aria-valuenow={Math.round(Math.min(100, result.utilization))}
+					aria-label="Trailer space used"
+				>
+					<div class="cap-bar-fill vol" style:width="{volBarPct}%"></div>
+				</div>
+			</div>
+
+			<div class="cap-bar-block">
+				<div class="cap-bar-header">
+					<span class="cap-bar-title">Weight</span>
+					<span class="cap-bar-meta">
+						{Math.round(placedWeightLbs)} / {payloadLbs} lbs
+						{#if weightLeftLbs >= 0}
+							· <strong>{Math.round(weightLeftLbs)} lbs</strong> left
+						{:else}
+							· <strong class="over">{Math.round(-weightLeftLbs)} lbs</strong> over
+						{/if}
+					</span>
+				</div>
+				<div
+					class="cap-bar-track"
+					class:over-cap={weightUtilPct > 100}
+					role="progressbar"
+					aria-valuemin="0"
+					aria-valuemax="100"
+					aria-valuenow={Math.round(Math.min(100, weightUtilPct))}
+					aria-label="Trailer weight versus payload limit"
+				>
+					<div class="cap-bar-fill weight" style:width="{weightBarPct}%"></div>
+				</div>
+				{#if placedWithoutWeight > 0}
+					<p class="cap-bar-hint">
+						{placedWithoutWeight} item{placedWithoutWeight === 1 ? '' : 's'} missing weight — bar may be low
+					</p>
+				{/if}
 			</div>
 		</div>
 
@@ -93,6 +190,10 @@
 			<svg class="accordion-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
 		</summary>
 		<div class="accordion-body">
+			<p class="trailer-orient-hint">
+				<strong>Front-load weight:</strong> put the heaviest items toward the <strong>front</strong> (hitch /
+				tow vehicle) in the 3D view so the trailer tracks straight and is less likely to sway.
+			</p>
 			<div class="preset-grid">
 				{#each TRAILER_PRESETS as preset}
 					<button
@@ -194,9 +295,11 @@
 
 	/* Accordion */
 	.accordion {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border: none;
+		border-radius: var(--radius-lg);
 		overflow: hidden;
+		background: var(--color-bg-card);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 	}
 
 	.accordion-trigger {
@@ -238,6 +341,23 @@
 		padding: 0 12px 12px;
 	}
 
+	.trailer-orient-hint {
+		font-size: 12px;
+		line-height: 1.45;
+		color: var(--color-text-secondary);
+		margin: 0 0 12px;
+		padding: 12px 14px;
+		background: var(--color-bg);
+		border-radius: var(--radius-md);
+		border: none;
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+	}
+
+	.trailer-orient-hint strong {
+		color: var(--color-text-primary);
+		font-weight: 600;
+	}
+
 	.section-label {
 		font-size: 12px;
 		font-weight: 600;
@@ -258,15 +378,16 @@
 		flex-direction: column;
 		gap: 2px;
 		padding: 10px 12px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border: none;
+		border-radius: var(--radius-md);
 		text-align: left;
-		transition: all 0.15s;
+		background: var(--color-bg);
+		transition: background 0.2s ease, box-shadow 0.2s ease;
 	}
 
 	.preset-btn.active {
-		border-color: #525252;
 		background: var(--color-bg-elevated);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 	}
 
 	.preset-name {
@@ -317,8 +438,86 @@
 
 	.pack-stats {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(2, 1fr);
 		gap: 10px;
+	}
+
+	.pack-bars {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.cap-bar-block {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.cap-bar-header {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.cap-bar-title {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.cap-bar-meta {
+		font-size: 13px;
+		color: var(--color-text-muted);
+		line-height: 1.35;
+	}
+
+	.cap-bar-meta strong {
+		color: var(--color-text-primary);
+		font-weight: 600;
+	}
+
+	.cap-bar-meta .over {
+		color: var(--color-danger);
+	}
+
+	.cap-bar-track {
+		height: 8px;
+		border-radius: 100px;
+		background: rgba(255, 255, 255, 0.06);
+		border: none;
+		overflow: hidden;
+	}
+
+	.cap-bar-track.over-cap {
+		box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.45);
+	}
+
+	.cap-bar-fill {
+		height: 100%;
+		border-radius: 100px;
+		transition: width 0.25s ease;
+	}
+
+	.cap-bar-fill.vol {
+		background: linear-gradient(90deg, #9a9a9a, #f0f0f0);
+	}
+
+	.cap-bar-fill.weight {
+		background: linear-gradient(90deg, #22c55e, #4ade80);
+	}
+
+	.cap-bar-track.over-cap .cap-bar-fill.weight {
+		background: linear-gradient(90deg, var(--color-danger), #f87171);
+	}
+
+	.cap-bar-hint {
+		font-size: 11px;
+		color: var(--color-text-muted);
+		margin: 0;
+		line-height: 1.35;
 	}
 
 	.pack-stat {
@@ -329,7 +528,7 @@
 		padding: 14px 8px;
 		background: var(--color-bg-card);
 		border-radius: var(--radius-md);
-		border: 1px solid var(--color-border);
+		border: none;
 	}
 
 	.pack-stat-val {
@@ -340,10 +539,6 @@
 
 	.pack-stat-val.warn {
 		color: var(--color-warning);
-	}
-
-	.pack-stat-val.accent {
-		color: var(--color-accent);
 	}
 
 	.pack-stat-label {
@@ -379,12 +574,6 @@
 		color: var(--color-warning);
 	}
 
-	.load-order {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-
 	.stepper {
 		display: flex;
 		align-items: center;
@@ -398,9 +587,11 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border: 1px solid var(--color-border);
+		border: none;
 		border-radius: 50%;
-		transition: all 0.15s;
+		background: var(--color-bg-card);
+		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
+		transition: background 0.2s ease;
 	}
 
 	.step-btn:disabled {
