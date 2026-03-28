@@ -10,6 +10,7 @@
 	import ContentsEditor from './ContentsEditor.svelte';
 	import CameraCapture from './CameraCapture.svelte';
 	import MeasurementCanvas from './MeasurementCanvas.svelte';
+	import BottomSheet from './BottomSheet.svelte';
 	import { fileToDataUrl, compressPhoto } from '$lib/utils/photo';
 
 	const PHOTO_PLACEHOLDER =
@@ -38,6 +39,21 @@
 	let notes = $state('');
 	let photoUrl = $state<string | null>(null);
 	let showDeleteConfirm = $state(false);
+
+	// Mobile bottom-sheet state — auto-opens when sidebar mode is active
+	let sheetState = $state<'peek' | 'full'>('peek');
+	// peekHeight = pill(20) + sidebar-header(~52px) ≈ 72px
+	const SHEET_PEEK_H = 72;
+
+	$effect(() => {
+		if (sidebarMode !== 'home') sheetState = 'full';
+	});
+
+	$effect(() => {
+		if (sheetState === 'peek' && sidebarMode !== 'home') {
+			switchToHome();
+		}
+	});
 
 	let photoStep = $state<'capture' | 'measure'>('capture');
 	let rawPhoto = $state<string | null>(null);
@@ -349,8 +365,9 @@
 		tabindex="-1"
 		onchange={handleReplacePhotoSelected}
 	/>
-	<!-- Left sidebar -->
+	<!-- Left sidebar / mobile bottom sheet -->
 	<div class="left-panel">
+		<BottomSheet bind:state={sheetState} peekHeight={SHEET_PEEK_H}>
 		<div class="sidebar-header" class:sidebar-header-home={sidebarMode === 'home'}>
 			{#if sidebarMode === 'home'}
 				<h1 class="sidebar-title">Overview</h1>
@@ -711,8 +728,8 @@
 				</div>
 			{/if}
 		</div>
+		</BottomSheet>
 	</div>
-
 	<!-- Right: inventory list -->
 	<div class="right-panel">
 		<div class="inv-scroll">
@@ -841,8 +858,13 @@
 		opacity: 0.4;
 	}
 
+	/* On mobile the BottomSheet handles overflow — sidebar-scroll must be visible */
 	.sidebar-scroll {
-		display: none;
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		overflow: hidden; /* BottomSheet.sheet-body handles outer scroll */
 	}
 
 	.right-panel {
@@ -1465,10 +1487,11 @@
 
 	.add-item-float {
 		position: fixed;
-		z-index: 40;
+		z-index: 210; /* above the sheet */
 		left: 16px;
 		right: 16px;
-		bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 6px);
+		/* On mobile, float just above the peek strip (tab-bar + peek height) */
+		bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 72px + 8px);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1596,10 +1619,8 @@
 			overflow: hidden;
 		}
 
+		/* On desktop the BottomSheet is position:static — sidebar-scroll scrolls independently */
 		.sidebar-scroll {
-			display: flex;
-			flex-direction: column;
-			flex: 1;
 			overflow-y: auto;
 			-webkit-overflow-scrolling: touch;
 		}
@@ -1610,9 +1631,12 @@
 		}
 
 		.add-item-float {
+			z-index: 40;
 			left: 16px;
 			right: auto;
 			width: calc(360px - 32px);
+			/* On desktop sit above the tab bar as before */
+			bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 6px);
 		}
 	}
 </style>

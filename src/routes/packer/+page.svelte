@@ -7,6 +7,7 @@
 	import { accordionState } from '$lib/stores/app';
 	import PackControls from '$lib/components/PackControls.svelte';
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
+	import BottomSheet from '$lib/components/BottomSheet.svelte';
 
 	let currentTrailer = $state<TrailerPreset>({ name: '', length: 12, width: 6, height: 6.5 });
 	let result = $state<PackResult | null>(null);
@@ -15,6 +16,15 @@
 	let showControls = $state(true);
 	let items = $state<InventoryItem[]>([]);
 	let packedIds = $state(new Set<string>());
+
+	// Mobile bottom-sheet state — auto-opens when an item is selected
+	let sheetState = $state<'peek' | 'full'>('peek');
+	// peekHeight = pill(20) + packer-header(~60px) ≈ 80px
+	const SHEET_PEEK_H = 80;
+
+	$effect(() => {
+		if (selectedItemId) sheetState = 'full';
+	});
 
 	trailer.subscribe((v) => currentTrailer = v);
 	packResult.subscribe((v) => {
@@ -152,8 +162,9 @@
 </svelte:head>
 
 <div class="packer-page">
-	<!-- Left sidebar (desktop) / top section (mobile) -->
+	<!-- Left sidebar (desktop) / bottom sheet (mobile) -->
 	<div class="left-panel">
+		<BottomSheet bind:state={sheetState} peekHeight={SHEET_PEEK_H}>
 		<div class="packer-header">
 			<h1>Pack Planner</h1>
 		</div>
@@ -304,6 +315,7 @@
 				</details>
 			{/if}
 		</div>
+		</BottomSheet>
 	</div>
 
 	<!-- Right: 3D scene -->
@@ -450,8 +462,13 @@
 		display: contents;
 	}
 
+	/* On mobile the BottomSheet handles scroll — panel-scroll must be visible */
 	.panel-scroll {
-		display: none;
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		overflow: hidden;
 	}
 
 	.packer-header {
@@ -909,10 +926,8 @@
 			overflow: hidden;
 		}
 
+		/* On desktop the BottomSheet is static — panel-scroll scrolls independently */
 		.panel-scroll {
-			display: flex;
-			flex-direction: column;
-			flex: 1;
 			overflow-y: auto;
 			-webkit-overflow-scrolling: touch;
 		}
