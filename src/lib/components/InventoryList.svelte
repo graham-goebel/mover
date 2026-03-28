@@ -1,10 +1,11 @@
 <script lang="ts">
 	import type { InventoryItem, ItemCategory, ItemShape, Dimensions } from '$lib/types';
 	import { inventory } from '$lib/stores/inventory';
-	import { moveDate } from '$lib/stores/app';
+	import { moveDate, triposrAvailable } from '$lib/stores/app';
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 	import { TRAILER_PRESETS } from '$lib/stores/trailer';
+	import { generateModel } from '$lib/utils/triposr';
 	import ItemCard from './ItemCard.svelte';
 	import ContentsEditor from './ContentsEditor.svelte';
 	import CameraCapture from './CameraCapture.svelte';
@@ -43,6 +44,9 @@
 
 	let replacePhotoInput = $state<HTMLInputElement | null>(null);
 	let replacePhotoLoading = $state(false);
+	let generate3dLoading = $state(false);
+	let generate3dError = $state<string | null>(null);
+	let modelUrl = $state<string | null>(null);
 
 	/** Lines for new box/bin items before the item exists in the store */
 	let draftContents = $state<string[]>([]);
@@ -121,6 +125,8 @@
 		photoUrl = null;
 		showDeleteConfirm = false;
 		draftContents = [];
+		modelUrl = null;
+		generate3dError = null;
 	}
 
 	function draftContentAdd(text: string) {
@@ -167,6 +173,7 @@
 		forSale = item.forSale ?? false;
 		notes = item.notes ?? '';
 		photoUrl = item.photo || null;
+		modelUrl = item.modelUrl || null;
 		showDeleteConfirm = false;
 	}
 
@@ -187,6 +194,7 @@
 			fragile,
 			stackable,
 			forSale,
+			modelUrl: modelUrl || undefined,
 			contents:
 				category === 'box' || shape === 'bin' ? [...draftContents] : [],
 			notes: notes || undefined
@@ -206,6 +214,7 @@
 			fragile,
 			stackable,
 			forSale,
+			modelUrl: modelUrl || undefined,
 			notes: notes || undefined
 		});
 		switchToHome();
@@ -225,6 +234,23 @@
 
 	function triggerReplacePhoto() {
 		replacePhotoInput?.click();
+	}
+
+	async function handleGenerate3D() {
+		if (!photoUrl) return;
+		generate3dLoading = true;
+		generate3dError = null;
+		const result = await generateModel(photoUrl);
+		generate3dLoading = false;
+		if (result.ok) {
+			modelUrl = result.url;
+			// Persist immediately if editing an existing item
+			if (editingId) {
+				inventory.update(editingId, { modelUrl: result.url });
+			}
+		} else {
+			generate3dError = result.error;
+		}
 	}
 
 	async function handleReplacePhotoSelected(e: Event) {
@@ -477,6 +503,38 @@
 							</button>
 							<button type="button" class="photo-btn danger" onclick={removePhoto}>Remove</button>
 						</div>
+
+						{#if $triposrAvailable}
+							<div class="generate-3d-block">
+								{#if modelUrl}
+									<div class="generate-3d-done">
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+										3D model generated
+										<button type="button" class="regen-btn" onclick={handleGenerate3D} disabled={generate3dLoading}>Regenerate</button>
+									</div>
+								{:else}
+									<button
+										type="button"
+										class="generate-3d-btn"
+										onclick={handleGenerate3D}
+										disabled={generate3dLoading}
+									>
+										{#if generate3dLoading}
+											<span class="gen-spinner"></span>
+											Generating 3D model…
+										{:else}
+											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+												<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+											</svg>
+											Generate 3D Model
+										{/if}
+									</button>
+								{/if}
+								{#if generate3dError}
+									<p class="generate-3d-error">{generate3dError}</p>
+								{/if}
+							</div>
+						{/if}
 					{:else}
 						<button class="add-photo-btn" onclick={openPhotoCapture}>
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -953,6 +1011,78 @@
 
 	.add-photo-btn:active {
 		background: var(--color-bg-elevated);
+	}
+
+	.generate-3d-block {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding-top: 4px;
+	}
+
+	.generate-3d-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		width: 100%;
+		padding: 10px 16px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-text);
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		transition: all 0.15s;
+	}
+
+	.generate-3d-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.generate-3d-btn:not(:disabled):active {
+		background: #2a2a2a;
+	}
+
+	.generate-3d-done {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: var(--color-success);
+		font-weight: 600;
+	}
+
+	.regen-btn {
+		margin-left: auto;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--color-text-muted);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: 2px 8px;
+	}
+
+	.generate-3d-error {
+		font-size: 11px;
+		color: var(--color-danger);
+		line-height: 1.4;
+	}
+
+	.gen-spinner {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--color-border);
+		border-top-color: var(--color-text);
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
 	.photo-capture-area {

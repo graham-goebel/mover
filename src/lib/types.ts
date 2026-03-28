@@ -32,6 +32,7 @@ export interface InventoryItem {
 	fragile: boolean;
 	stackable: boolean;
 	forSale: boolean;
+	modelUrl?: string; // GLB URL from TripoSR server, if generated
 	contents: string[];
 	notes?: string;
 	createdAt: number;

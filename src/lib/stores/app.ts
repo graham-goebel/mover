@@ -56,3 +56,28 @@ function createAccordionStore() {
 }
 
 export const accordionState = createAccordionStore();
+
+// ---------------------------------------------------------------------------
+// TripoSR server availability
+// ---------------------------------------------------------------------------
+import { checkTriposrHealth } from '$lib/utils/triposr';
+
+function createTriposrStore() {
+	const { subscribe, set } = writable<boolean>(false);
+
+	async function check() {
+		const available = await checkTriposrHealth();
+		set(available);
+		return available;
+	}
+
+	// Recheck every 30s so the button appears/disappears without a page reload
+	if (typeof window !== 'undefined') {
+		check();
+		setInterval(check, 30_000);
+	}
+
+	return { subscribe, check };
+}
+
+export const triposrAvailable = createTriposrStore();

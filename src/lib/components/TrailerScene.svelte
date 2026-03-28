@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { T, Canvas } from '@threlte/core';
-	import { OrbitControls, Text } from '@threlte/extras';
+	import { OrbitControls, Text, GLTF } from '@threlte/extras';
 	import type { PackedItem, TrailerPreset } from '$lib/types';
 	import * as THREE from 'three';
 	import { createItemMesh, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
@@ -97,24 +97,32 @@
 		<T.MeshStandardMaterial color="#111111" transparent opacity={0.8} />
 	</T.Mesh>
 
-	<!-- Packed items with procedural shapes -->
+	<!-- Packed items -->
 	{#each visibleItems as packed (packed.item.id)}
 		{@const pos = itemPosition(packed)}
 		{@const scl = itemScale(packed)}
 		{@const isSelected = selectedItemId === packed.item.id}
-		{@const shapeMesh = getShapeMesh(packed)}
 
 		<T.Group position={pos}>
-			<!-- Click target — fully transparent but raycast-able -->
-			<T.Mesh
-				onclick={() => handleItemClick(packed.item.id)}
-			>
+			<!-- Click target — transparent but raycast-able -->
+			<T.Mesh onclick={() => handleItemClick(packed.item.id)}>
 				<T.BoxGeometry args={scl} />
 				<T.MeshBasicMaterial transparent opacity={0} depthWrite={false} />
 			</T.Mesh>
 
-			<!-- Procedural shape -->
-			<T is={shapeMesh.clone()} />
+			{#if packed.item.modelUrl}
+				<!-- GLB from TripoSR: scale to fit the bounding box -->
+				{#key packed.item.modelUrl}
+					<GLTF
+						url={packed.item.modelUrl}
+						scale={[scl[0], scl[1], scl[2]]}
+					/>
+				{/key}
+			{:else}
+				<!-- Procedural fallback shape -->
+				{@const shapeMesh = getShapeMesh(packed)}
+				<T is={shapeMesh.clone()} />
+			{/if}
 
 			<!-- Bounding box wireframe -->
 			<T.LineSegments>
@@ -126,7 +134,6 @@
 				/>
 			</T.LineSegments>
 
-			<!-- Name label floating above -->
 			{#if isSelected}
 				<Text
 					text={packed.item.name}
