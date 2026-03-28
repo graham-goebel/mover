@@ -260,11 +260,12 @@
 							{#each items as item (item.id)}
 							{@const packed = liveResult?.placed.find(p => p.item.id === item.id)}
 							{@const unplaced = liveResult?.unplaced.find(u => u.id === item.id)}
+							{@const noDims = item.dimensions.l <= 0 || item.dimensions.w <= 0 || item.dimensions.h <= 0}
 							{@const inTrailer = packedIds.has(item.id)}
 								<div
 									class="item-row"
 									class:packed={!!packed}
-									class:unplaced={!!unplaced}
+									class:unplaced={!!unplaced || noDims}
 									class:selected={selectedItemId === item.id}
 									role="button"
 									tabindex="0"
@@ -273,11 +274,15 @@
 								>
 									<span
 										class="item-dot"
-										style:background={packed?.color ?? (unplaced ? 'var(--color-warning)' : 'var(--color-border)')}
+										style:background={packed?.color ?? ((unplaced || noDims) ? 'var(--color-warning)' : 'var(--color-border)')}
 									></span>
 									<span class="item-name">{item.name}</span>
 									<span class="item-dims">
-										{item.dimensions.l}×{item.dimensions.w}×{item.dimensions.h}″
+										{#if noDims}
+											<em style="color: var(--color-warning); font-style: normal;">No dimensions</em>
+										{:else}
+											{item.dimensions.l}×{item.dimensions.w}×{item.dimensions.h}″
+										{/if}
 									</span>
 									{#if inTrailer}
 										<button

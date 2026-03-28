@@ -107,7 +107,15 @@ function scorePlacement(x: number, y: number, z: number, box: Box): number {
  * so they end up on top. Non-stackable items get a ceiling flag.
  */
 export function packItems(items: InventoryItem[], container: TrailerPreset): PackResult {
-	const sortedItems = [...items].sort((a, b) => {
+	// Items with no dimensions set can't be packed — move them to unplaced
+	const packable = items.filter(
+		i => i.dimensions.l > 0 && i.dimensions.w > 0 && i.dimensions.h > 0
+	);
+	const zeroDimItems = items.filter(
+		i => i.dimensions.l <= 0 || i.dimensions.w <= 0 || i.dimensions.h <= 0
+	);
+
+	const sortedItems = [...packable].sort((a, b) => {
 		if (a.fragile !== b.fragile) return a.fragile ? 1 : -1;
 
 		const volA = a.dimensions.l * a.dimensions.w * a.dimensions.h;
@@ -174,6 +182,9 @@ export function packItems(items: InventoryItem[], container: TrailerPreset): Pac
 			unplaced.push(item);
 		}
 	}
+
+	// Items with no dimensions go to unplaced too
+	unplaced.push(...zeroDimItems);
 
 	const containerVol = container.length * container.width * container.height * 1728; // cu ft to cu in
 	const usedVol = placed.reduce(
