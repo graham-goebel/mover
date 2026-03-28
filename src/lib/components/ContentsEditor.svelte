@@ -2,22 +2,35 @@
 	import { inventory } from '$lib/stores/inventory';
 
 	interface Props {
-		itemId: string;
+		/** When set and not in draft mode, lines are saved to the inventory store. */
+		itemId?: string;
 		contents: string[];
+		/** New item flow: keep lines in parent until the item is created. */
+		draft?: boolean;
+		onDraftAdd?: (text: string) => void;
+		onDraftRemove?: (index: number) => void;
 	}
 
-	let { itemId, contents }: Props = $props();
+	let { itemId, contents, draft = false, onDraftAdd, onDraftRemove }: Props = $props();
 	let newContent = $state('');
 
 	function add() {
 		const text = newContent.trim();
 		if (!text) return;
-		inventory.addContent(itemId, text);
+		if (draft) {
+			onDraftAdd?.(text);
+		} else if (itemId) {
+			inventory.addContent(itemId, text);
+		}
 		newContent = '';
 	}
 
 	function remove(index: number) {
-		inventory.removeContent(itemId, index);
+		if (draft) {
+			onDraftRemove?.(index);
+		} else if (itemId) {
+			inventory.removeContent(itemId, index);
+		}
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -31,7 +44,7 @@
 <div class="contents-editor">
 	<h4 class="section-title">
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-		Box Contents
+		Contents
 	</h4>
 
 	{#if contents.length > 0}

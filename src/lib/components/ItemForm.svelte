@@ -99,19 +99,12 @@
 		</div>
 
 		<div class="field">
-			<span class="field-label">3D Shape</span>
-			<div class="shape-grid">
+			<label class="field-label" for="form-item-shape">3D Shape</label>
+			<select id="form-item-shape" class="shape-select" bind:value={shape}>
 				{#each SHAPE_OPTIONS as s}
-					<button
-						class="shape-btn"
-						class:active={shape === s.value}
-						onclick={() => shape = s.value}
-					>
-						<span class="shape-icon">{s.icon}</span>
-						<span class="shape-label">{s.label}</span>
-					</button>
+					<option value={s.value}>{s.icon} {s.label}</option>
 				{/each}
-			</div>
+			</select>
 		</div>
 
 		<div class="field">
@@ -260,30 +253,11 @@
 	.cat-icon { font-size: 20px; }
 	.cat-label { font-size: 12px; font-weight: 500; }
 
-	.shape-grid {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: 6px;
+	.shape-select {
+		width: 100%;
+		cursor: pointer;
+		color-scheme: dark;
 	}
-
-	.shape-btn {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 3px;
-		padding: 8px 4px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		transition: all 0.15s;
-	}
-
-	.shape-btn.active {
-		border-color: #525252;
-		background: var(--color-bg-elevated);
-	}
-
-	.shape-icon { font-size: 18px; }
-	.shape-label { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); }
 
 	.toggles {
 		display: flex;

@@ -74,6 +74,9 @@
 		<div class="info">
 			<div class="name-row">
 				<span class="name">{item.name}</span>
+				{#if item.forSale}
+					<span class="badge sale">For Sale</span>
+				{/if}
 				{#if item.fragile}
 					<span class="badge fragile">Fragile</span>
 				{/if}
@@ -185,6 +188,11 @@
 	.badge.fragile {
 		background: var(--color-warning-soft);
 		color: var(--color-warning);
+	}
+
+	.badge.sale {
+		background: rgba(59, 130, 246, 0.1);
+		color: #3b82f6;
 	}
 
 	.dims {

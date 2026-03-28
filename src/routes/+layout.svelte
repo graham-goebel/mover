@@ -32,6 +32,5 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		-webkit-overflow-scrolling: touch;
-		padding-bottom: var(--tab-bar-height);
 	}
 </style>

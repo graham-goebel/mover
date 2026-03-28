@@ -31,6 +31,7 @@ export interface InventoryItem {
 	shape: ItemShape;
 	fragile: boolean;
 	stackable: boolean;
+	forSale: boolean;
 	contents: string[];
 	notes?: string;
 	createdAt: number;

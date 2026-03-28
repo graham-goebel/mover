@@ -4,10 +4,18 @@
 	import { moveDate } from '$lib/stores/app';
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
+	import { TRAILER_PRESETS } from '$lib/stores/trailer';
 	import ItemCard from './ItemCard.svelte';
 	import ContentsEditor from './ContentsEditor.svelte';
 	import CameraCapture from './CameraCapture.svelte';
 	import MeasurementCanvas from './MeasurementCanvas.svelte';
+	import { fileToDataUrl, compressPhoto } from '$lib/utils/photo';
+
+	const PHOTO_PLACEHOLDER =
+		'data:image/svg+xml;base64,' +
+		btoa(
+			'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%231e293b" width="200" height="200"/><text x="50%" y="50%" fill="%2364748b" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">📦</text></svg>'
+		);
 
 	let items = $state<InventoryItem[]>([]);
 	let filterCategory = $state<ItemCategory | 'all'>('all');
@@ -25,12 +33,19 @@
 	let shape = $state<ItemShape>('box');
 	let fragile = $state(false);
 	let stackable = $state(true);
+	let forSale = $state(false);
 	let notes = $state('');
 	let photoUrl = $state<string | null>(null);
 	let showDeleteConfirm = $state(false);
 
 	let photoStep = $state<'capture' | 'measure'>('capture');
 	let rawPhoto = $state<string | null>(null);
+
+	let replacePhotoInput = $state<HTMLInputElement | null>(null);
+	let replacePhotoLoading = $state(false);
+
+	/** Lines for new box/bin items before the item exists in the store */
+	let draftContents = $state<string[]>([]);
 
 	inventory.subscribe((v) => items = v);
 
@@ -45,12 +60,12 @@
 
 	const filters: { value: ItemCategory | 'all'; label: string }[] = [
 		{ value: 'all', label: 'All' },
-		{ value: 'box', label: '📦 Boxes' },
-		{ value: 'furniture', label: '🪑 Furniture' },
-		{ value: 'appliance', label: '🔌 Appliances' },
-		{ value: 'fragile', label: '⚠️ Fragile' },
-		{ value: 'oddShape', label: '🔷 Odd' },
-		{ value: 'other', label: '📋 Other' }
+		{ value: 'box', label: 'Boxes' },
+		{ value: 'furniture', label: 'Furniture' },
+		{ value: 'appliance', label: 'Appliances' },
+		{ value: 'fragile', label: 'Fragile' },
+		{ value: 'oddShape', label: 'Odd shape' },
+		{ value: 'other', label: 'Other' }
 	];
 
 	const filtered = $derived(
@@ -79,6 +94,16 @@
 		return diff;
 	});
 
+	const recommendedTrailer = $derived.by(() => {
+		if (totalVolume <= 0) return null;
+		const FILL_FACTOR = 0.65;
+		for (const p of TRAILER_PRESETS) {
+			const cap = p.length * p.width * p.height * FILL_FACTOR;
+			if (totalVolume <= cap) return p.name;
+		}
+		return TRAILER_PRESETS[TRAILER_PRESETS.length - 1].name + '+';
+	});
+
 	const vol = $derived(volumeCuFt(l, w, h));
 
 	const editingItem = $derived(items.find((it) => it.id === editingId) ?? null);
@@ -91,9 +116,19 @@
 		shape = 'box';
 		fragile = false;
 		stackable = true;
+		forSale = false;
 		notes = '';
 		photoUrl = null;
 		showDeleteConfirm = false;
+		draftContents = [];
+	}
+
+	function draftContentAdd(text: string) {
+		draftContents = [...draftContents, text];
+	}
+
+	function draftContentRemove(index: number) {
+		draftContents = draftContents.filter((_, i) => i !== index);
 	}
 
 	function switchToHome() {
@@ -129,6 +164,7 @@
 		shape = (item.shape ?? CATEGORY_DEFAULT_SHAPE[item.category] ?? 'generic') as ItemShape;
 		fragile = item.fragile;
 		stackable = item.stackable;
+		forSale = item.forSale ?? false;
 		notes = item.notes ?? '';
 		photoUrl = item.photo || null;
 		showDeleteConfirm = false;
@@ -141,17 +177,18 @@
 
 	function handleAdd() {
 		if (!name.trim()) return;
-		const placeholder = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%231e293b" width="200" height="200"/><text x="50%" y="50%" fill="%2364748b" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">📦</text></svg>');
 		inventory.add({
 			name: name.trim(),
-			photo: photoUrl || placeholder,
+			photo: photoUrl || PHOTO_PLACEHOLDER,
 			dimensions: { l, w, h },
 			weight: weight || undefined,
 			category,
 			shape,
 			fragile,
 			stackable,
-			contents: [],
+			forSale,
+			contents:
+				category === 'box' || shape === 'bin' ? [...draftContents] : [],
 			notes: notes || undefined
 		});
 		switchToHome();
@@ -161,12 +198,14 @@
 		if (!editingId) return;
 		inventory.update(editingId, {
 			name,
+			photo: photoUrl || PHOTO_PLACEHOLDER,
 			dimensions: { l, w, h },
 			weight: weight || undefined,
 			category,
 			shape,
 			fragile,
 			stackable,
+			forSale,
 			notes: notes || undefined
 		});
 		switchToHome();
@@ -182,6 +221,35 @@
 		sidebarMode = 'photo';
 		photoStep = 'capture';
 		rawPhoto = null;
+	}
+
+	function triggerReplacePhoto() {
+		replacePhotoInput?.click();
+	}
+
+	async function handleReplacePhotoSelected(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+		replacePhotoLoading = true;
+		try {
+			const raw = await fileToDataUrl(file);
+			const compressed = await compressPhoto(raw);
+			photoUrl = compressed;
+			if (editingId) {
+				inventory.update(editingId, { photo: compressed });
+			}
+		} finally {
+			replacePhotoLoading = false;
+		}
+	}
+
+	function removePhoto() {
+		photoUrl = null;
+		if (editingId) {
+			inventory.update(editingId, { photo: PHOTO_PLACEHOLDER });
+		}
 	}
 
 	function handleCapture(dataUrl: string) {
@@ -217,7 +285,16 @@
 	}
 </script>
 
-<div class="inv-page">
+<div class="inv-page" class:inv-home={sidebarMode === 'home'}>
+	<input
+		bind:this={replacePhotoInput}
+		type="file"
+		accept="image/*"
+		class="replace-photo-input"
+		aria-hidden="true"
+		tabindex="-1"
+		onchange={handleReplacePhotoSelected}
+	/>
 	<!-- Left sidebar -->
 	<div class="left-panel">
 		<div class="sidebar-header">
@@ -261,44 +338,58 @@
 						</div>
 						<div class="home-stat">
 							<span class="home-stat-val">{totalWeight > 0 ? totalWeight : '—'}</span>
-							<span class="home-stat-label">{totalWeight > 0 ? 'lbs' : 'Weight'}</span>
+							<span class="home-stat-label">lbs</span>
 						</div>
 						<div class="home-stat">
 							<span class="home-stat-val">{totalVolume > 0 ? Math.round(totalVolume * 10) / 10 : '—'}</span>
 							<span class="home-stat-label">cu ft</span>
 						</div>
-					</div>
-
-					<div class="home-date">
-						<span class="home-date-label">Move Date</span>
-						<input
-							type="date"
-							class="home-date-input"
-							value={moveDateVal ?? ''}
-							oninput={(e) => moveDate.set(e.currentTarget.value || null)}
-						/>
-						{#if daysUntilMove !== null}
-							<span class="home-date-countdown" class:urgent={daysUntilMove <= 7}>
-								{daysUntilMove} {daysUntilMove === 1 ? 'day' : 'days'} away
+						<label class="home-stat home-stat-date">
+							<span class="home-stat-val">{daysUntilMove !== null ? daysUntilMove : '—'}</span>
+							<span class="home-stat-label">
+								<svg class="cal-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+								</svg>
+								days
 							</span>
-						{/if}
+							<input
+								type="date"
+								class="hidden-date-input"
+								value={moveDateVal ?? ''}
+								oninput={(e) => moveDate.set(e.currentTarget.value || null)}
+							/>
+						</label>
 					</div>
 
-					<button class="home-add-btn" onclick={switchToAdd}>
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-							<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-						</svg>
-						Add Item
-					</button>
+					{#if recommendedTrailer}
+						<div class="home-rec">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="1" y="6" width="15" height="10" rx="2"/><path d="M16 10h4l3 3v3h-7v-6z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+							</svg>
+							<span>Recommended: <strong>{recommendedTrailer}</strong></span>
+						</div>
+					{/if}
 				</div>
 			{:else if sidebarMode === 'view' && editingItem}
 				{@const item = editingItem}
 				<div class="view-panel">
-					{#if item.photo && !item.photo.includes('data:image/svg+xml')}
-						<div class="view-photo">
-							<img src={item.photo} alt={item.name} />
-						</div>
-					{/if}
+					<div class="view-photo-block">
+						{#if item.photo && !item.photo.includes('data:image/svg+xml')}
+							<div class="view-photo">
+								<img src={item.photo} alt={item.name} />
+							</div>
+						{:else}
+							<div class="view-photo-placeholder" aria-hidden="true">📦</div>
+						{/if}
+						<button
+							type="button"
+							class="view-photo-action"
+							onclick={triggerReplacePhoto}
+							disabled={replacePhotoLoading}
+						>
+							{replacePhotoLoading ? 'Updating…' : item.photo?.includes('data:image/svg+xml') ? 'Add photo' : 'Replace photo'}
+						</button>
+					</div>
 
 					<div class="view-name">{item.name}</div>
 
@@ -328,6 +419,9 @@
 					</div>
 
 					<div class="view-badges">
+						{#if item.forSale}
+							<span class="badge badge-sale">💲 For Sale</span>
+						{/if}
 						{#if item.fragile}
 							<span class="badge badge-warn">⚠️ Fragile</span>
 						{/if}
@@ -374,8 +468,15 @@
 					{#if photoUrl}
 						<img src={photoUrl} alt={name || 'Item'} class="photo-thumb" />
 						<div class="photo-actions">
-							<button class="photo-btn" onclick={openPhotoCapture}>Replace</button>
-							<button class="photo-btn danger" onclick={() => photoUrl = null}>Remove</button>
+							<button
+								type="button"
+								class="photo-btn"
+								onclick={triggerReplacePhoto}
+								disabled={replacePhotoLoading}
+							>
+								{replacePhotoLoading ? '…' : 'Replace'}
+							</button>
+							<button type="button" class="photo-btn danger" onclick={removePhoto}>Remove</button>
 						</div>
 					{:else}
 						<button class="add-photo-btn" onclick={openPhotoCapture}>
@@ -440,22 +541,20 @@
 					</div>
 
 					<div class="field">
-						<span class="field-label">3D Shape</span>
-						<div class="shape-grid">
+						<label class="field-label" for="item-shape">3D Shape</label>
+						<select id="item-shape" class="shape-select" bind:value={shape}>
 							{#each SHAPE_OPTIONS as s}
-								<button
-									class="shape-btn"
-									class:active={shape === s.value}
-									onclick={() => shape = s.value}
-								>
-									<span class="shape-icon">{s.icon}</span>
-									<span class="shape-label">{s.label}</span>
-								</button>
+								<option value={s.value}>{s.icon} {s.label}</option>
 							{/each}
-						</div>
+						</select>
 					</div>
 
 					<div class="toggles">
+						<label class="toggle-row">
+							<span>For Sale</span>
+							<input type="checkbox" bind:checked={forSale} />
+							<span class="toggle-track"></span>
+						</label>
 						<label class="toggle-row">
 							<span>Fragile</span>
 							<input type="checkbox" bind:checked={fragile} />
@@ -467,6 +566,15 @@
 							<span class="toggle-track"></span>
 						</label>
 					</div>
+
+					{#if sidebarMode === 'add' && (category === 'box' || shape === 'bin')}
+						<ContentsEditor
+							draft={true}
+							contents={draftContents}
+							onDraftAdd={draftContentAdd}
+							onDraftRemove={draftContentRemove}
+						/>
+					{/if}
 
 					{#if sidebarMode === 'edit' && editingItem}
 						<ContentsEditor itemId={editingItem.id} contents={editingItem.contents} />
@@ -544,6 +652,15 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if sidebarMode === 'home'}
+		<button type="button" class="add-item-float" onclick={switchToAdd}>
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+				<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+			</svg>
+			Add Item
+		</button>
+	{/if}
 </div>
 
 <style>
@@ -552,6 +669,20 @@
 		height: 100%;
 		display: flex;
 		flex-direction: column;
+		position: relative;
+	}
+
+	.replace-photo-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+		opacity: 0;
 	}
 
 	.left-panel {
@@ -605,7 +736,7 @@
 		flex: 1;
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
-		padding: 0 16px 24px;
+		padding: 0 16px calc(80px + var(--safe-area-bottom));
 	}
 
 	/* View panel (read-only) */
@@ -614,6 +745,39 @@
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
+	}
+
+	.view-photo-block {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.view-photo-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 120px;
+		border-radius: var(--radius-md);
+		border: 1px dashed var(--color-border);
+		background: var(--color-bg-card);
+		font-size: 48px;
+		opacity: 0.85;
+	}
+
+	.view-photo-action {
+		align-self: flex-start;
+		padding: 8px 14px;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--color-accent);
+		background: transparent;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+	}
+
+	.view-photo-action:disabled {
+		opacity: 0.5;
 	}
 
 	.view-photo {
@@ -684,6 +848,11 @@
 	.badge-ok {
 		background: rgba(34, 197, 94, 0.1);
 		color: #22c55e;
+	}
+
+	.badge-sale {
+		background: rgba(59, 130, 246, 0.1);
+		color: #3b82f6;
 	}
 
 	.view-section {
@@ -871,30 +1040,12 @@
 	.cat-icon { font-size: 18px; }
 	.cat-label { font-size: 11px; font-weight: 500; }
 
-	.shape-grid {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: 4px;
+	.shape-select {
+		width: 100%;
+		cursor: pointer;
+		appearance: auto;
+		color-scheme: dark;
 	}
-
-	.shape-btn {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 2px;
-		padding: 6px 4px;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		transition: all 0.15s;
-	}
-
-	.shape-btn.active {
-		border-color: #525252;
-		background: var(--color-bg-elevated);
-	}
-
-	.shape-btn .shape-icon { font-size: 16px; }
-	.shape-btn .shape-label { font-size: 9px; font-weight: 500; color: var(--color-text-secondary); }
 
 	.toggles {
 		display: flex;
@@ -990,15 +1141,15 @@
 
 	/* Home panel (sidebar default) */
 	.home-panel {
-		padding: 20px 16px;
+		padding: 20px 16px 96px;
 		display: flex;
 		flex-direction: column;
-		gap: 20px;
+		gap: 16px;
 	}
 
 	.home-stats {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(2, 1fr);
 		gap: 10px;
 	}
 
@@ -1006,80 +1157,104 @@
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 2px;
-		padding: 16px 8px;
+		justify-content: center;
+		gap: 4px;
+		padding: 20px 12px;
 		background: var(--color-bg-card);
 		border-radius: var(--radius-md);
 		border: 1px solid var(--color-border);
 	}
 
 	.home-stat-val {
-		font-size: 28px;
+		font-size: 36px;
 		font-weight: 700;
 		line-height: 1;
 	}
 
 	.home-stat-label {
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-	}
-
-	.home-date {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.home-date-label {
-		font-size: 12px;
+		font-size: 11px;
 		font-weight: 600;
 		color: var(--color-text-secondary);
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.05em;
+		display: flex;
+		align-items: center;
+		gap: 4px;
 	}
 
-	.home-date-input {
-		font-size: 14px;
-		font-weight: 500;
-		color: var(--color-text);
+	.home-stat-date {
+		cursor: pointer;
+		position: relative;
+	}
+
+	.home-stat-date .home-stat-val {
+		transition: color 0.15s;
+	}
+
+	.home-stat-date:has(.hidden-date-input:focus) {
+		border-color: var(--color-accent);
+	}
+
+	.cal-icon {
+		opacity: 0.7;
+	}
+
+	.hidden-date-input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		cursor: pointer;
+		width: 100%;
+		height: 100%;
+	}
+
+	.home-rec {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 14px;
 		background: var(--color-bg-card);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		padding: 10px 12px;
-		color-scheme: dark;
-		width: 100%;
-	}
-
-	.home-date-countdown {
+		border-radius: var(--radius-md);
 		font-size: 13px;
-		font-weight: 600;
 		color: var(--color-text-secondary);
 	}
 
-	.home-date-countdown.urgent {
-		color: var(--color-warning);
+	.home-rec strong {
+		color: var(--color-text);
+		font-weight: 600;
 	}
 
-	.home-add-btn {
+	.add-item-float {
+		position: fixed;
+		z-index: 40;
+		left: 16px;
+		right: 16px;
+		bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 6px);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 8px;
-		width: 100%;
-		padding: 14px;
+		padding: 14px 20px;
+		margin: 0;
 		background: var(--color-accent);
 		color: var(--color-accent-fg);
 		font-size: 16px;
 		font-weight: 600;
-		border-radius: var(--radius-md);
-		transition: background 0.15s;
+		border: none;
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.06);
+		cursor: pointer;
+		transition: background 0.15s, transform 0.12s;
 	}
 
-	.home-add-btn:active {
+	.add-item-float:active {
 		background: var(--color-accent-hover);
+		transform: scale(0.98);
+	}
+
+	.inv-home .inv-scroll {
+		padding-bottom: calc(148px + var(--safe-area-bottom));
 	}
 
 	/* Inventory header */
@@ -1194,6 +1369,12 @@
 		.right-panel {
 			flex: 1;
 			min-width: 0;
+		}
+
+		.add-item-float {
+			left: 16px;
+			right: auto;
+			width: calc(360px - 32px);
 		}
 	}
 </style>
