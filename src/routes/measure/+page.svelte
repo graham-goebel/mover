@@ -32,7 +32,7 @@
 	}
 
 	function handleManualEntry() {
-		const placeholder = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%231e293b" width="200" height="200"/><text x="50%" y="50%" fill="%2364748b" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">📦</text></svg>');
+		const placeholder = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="#1e293b" width="200" height="200"/><text x="50%" y="50%" fill="#64748b" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">&#x1F4E6;</text></svg>');
 		measuredDims = { l: 0, w: 0, h: 0 };
 		finalPhoto = placeholder;
 		flowStep = 'form';
