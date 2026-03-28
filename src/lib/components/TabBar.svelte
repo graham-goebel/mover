@@ -11,16 +11,26 @@
 	}
 
 	let { tabs, currentPath }: Props = $props();
+
+	// Only one tab is active at a time: the one whose href is the longest prefix match
+	const activeTab = $derived(
+		[...tabs]
+			.filter(t => {
+				const base = t.href.replace(/\/$/, ''); // strip trailing slash for comparison
+				return (
+					currentPath === base ||
+					currentPath === base + '/' ||
+					currentPath.startsWith(base + '/')
+				);
+			})
+			.sort((a, b) => b.href.length - a.href.length)[0] ?? null
+	);
 </script>
 
 <nav class="tab-bar">
 	<div class="tab-pill">
 		{#each tabs as tab}
-			{@const isRoot = tab.href.endsWith('/') && !tabs.some(t => t !== tab && currentPath.startsWith(t.href) && !t.href.endsWith('/'))}
-			{@const active = isRoot
-				? (currentPath === tab.href || currentPath === tab.href.slice(0, -1))
-				: currentPath.startsWith(tab.href)}
-			<a href={tab.href} class="tab" class:active>
+			<a href={tab.href} class="tab" class:active={tab === activeTab}>
 				<div class="tab-icon">
 					{#if tab.icon === 'inventory'}
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
