@@ -72,6 +72,16 @@
 
 	inventory.subscribe((v) => items = v);
 
+	// Common moving box sizes (as sold at Home Depot / U-Haul)
+	const BOX_PRESETS: { label: string; l: number; w: number; h: number }[] = [
+		{ label: 'Small\n16×12×12', l: 16, w: 12, h: 12 },
+		{ label: 'Medium\n18×18×16', l: 18, w: 18, h: 16 },
+		{ label: 'Large\n20×20×15', l: 20, w: 20, h: 15 },
+		{ label: 'XL\n24×18×18', l: 24, w: 18, h: 18 },
+		{ label: 'Wardrobe\n24×24×40', l: 24, w: 24, h: 40 },
+		{ label: 'Dish\n18×18×28', l: 18, w: 18, h: 28 },
+	];
+
 	const categories: { value: ItemCategory; label: string; icon: string }[] = [
 		{ value: 'box', label: 'Box', icon: '📦' },
 		{ value: 'furniture', label: 'Furniture', icon: '🪑' },
@@ -643,6 +653,19 @@
 						</div>
 						{#if vol > 0}
 							<p class="dim-summary">{vol} cu ft</p>
+						{/if}
+
+						{#if category === 'box'}
+							<div class="box-presets">
+								{#each BOX_PRESETS as preset}
+									<button
+										type="button"
+										class="box-preset-btn"
+										class:active={l === preset.l && w === preset.w && h === preset.h}
+										onclick={() => { l = preset.l; w = preset.w; h = preset.h; }}
+									>{preset.label}</button>
+								{/each}
+							</div>
 						{/if}
 					</div>
 
@@ -1273,6 +1296,34 @@
 	.dim-summary {
 		font-size: 13px;
 		color: var(--color-text-muted);
+	}
+
+	.box-presets {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: 8px;
+	}
+
+	.box-preset-btn {
+		font-size: 10px;
+		font-weight: 500;
+		line-height: 1.3;
+		white-space: pre-line;
+		text-align: center;
+		padding: 6px 10px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		color: var(--color-text-secondary);
+		background: transparent;
+		transition: all 0.15s;
+	}
+
+	.box-preset-btn.active,
+	.box-preset-btn:active {
+		background: var(--color-bg-elevated);
+		border-color: var(--color-text-muted);
+		color: var(--color-text);
 	}
 
 	.cat-grid {
