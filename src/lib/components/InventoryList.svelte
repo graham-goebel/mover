@@ -377,7 +377,7 @@
 	/>
 	<!-- Left sidebar / mobile bottom sheet -->
 	<div class="left-panel">
-		<BottomSheet bind:state={sheetState} peekHeight={SHEET_PEEK_H}>
+		<BottomSheet bind:value={sheetState} peekHeight={SHEET_PEEK_H}>
 		<div class="sidebar-header" class:sidebar-header-home={sidebarMode === 'home'}>
 			{#if sidebarMode === 'home'}
 				<h1 class="sidebar-title">Overview</h1>

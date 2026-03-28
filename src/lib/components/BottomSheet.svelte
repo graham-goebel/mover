@@ -2,8 +2,8 @@
 	import type { Snippet } from 'svelte';
 
 	interface Props {
-		/** Bindable sheet state */
-		state?: 'peek' | 'full';
+		/** Bindable sheet open/close value */
+		value?: 'peek' | 'full';
 		/**
 		 * How many px remain visible in peek mode.
 		 * Should equal: handle-pill area (20px) + your header height.
@@ -15,7 +15,7 @@
 	}
 
 	let {
-		state = $bindable<'peek' | 'full'>('peek'),
+		value = $bindable<'peek' | 'full'>('peek'),
 		peekHeight = 68,
 		backdrop = true,
 		children
@@ -29,7 +29,7 @@
 	let touchLastY   = 0;
 	let touchLastT   = 0;
 	let touchVel     = 0;
-	let dragBaseState: 'peek' | 'full' = 'peek';
+	let dragBaseValue: 'peek' | 'full' = 'peek';
 
 	// Distance thresholds for snapping
 	const SNAP_PX  = 56;
@@ -41,7 +41,7 @@
 		touchLastY   = t.clientY;
 		touchLastT   = e.timeStamp;
 		touchVel     = 0;
-		dragBaseState = state;
+		dragBaseValue = value;
 		isDragging   = true;
 	}
 
@@ -54,7 +54,7 @@
 
 		const dy = t.clientY - touchStartY;
 
-		if (dragBaseState === 'peek') {
+		if (dragBaseValue === 'peek') {
 			// Dragging up from peek: cap at 0 (can't go below start)
 			const offset = Math.min(0, dy);
 			dragTransform = `translateY(calc(100% - ${peekHeight}px + ${offset}px))`;
@@ -71,28 +71,28 @@
 		isDragging = false;
 		const dy = touchLastY - touchStartY;
 
-		if (dragBaseState === 'peek') {
-			state = (dy < -SNAP_PX || touchVel < -SNAP_VEL) ? 'full' : 'peek';
+		if (dragBaseValue === 'peek') {
+			value = (dy < -SNAP_PX || touchVel < -SNAP_VEL) ? 'full' : 'peek';
 		} else {
-			state = (dy > SNAP_PX  || touchVel > SNAP_VEL)  ? 'peek' : 'full';
+			value = (dy > SNAP_PX  || touchVel > SNAP_VEL)  ? 'peek' : 'full';
 		}
 		dragTransform = '';
 	}
 
 	function toggleSheet() {
-		state = state === 'full' ? 'peek' : 'full';
+		value = value === 'full' ? 'peek' : 'full';
 	}
 </script>
 
 <!-- Backdrop — tap to collapse -->
-{#if backdrop && state === 'full'}
+{#if backdrop && value === 'full'}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="sheet-backdrop" onclick={() => state = 'peek'}></div>
+	<div class="sheet-backdrop" onclick={() => value = 'peek'}></div>
 {/if}
 
 <div
 	class="bottom-sheet"
-	class:is-open={state === 'full'}
+	class:is-open={value === 'full'}
 	class:is-dragging={isDragging}
 	style:--peek-h="{peekHeight}px"
 	style:transform={isDragging ? dragTransform : undefined}
@@ -106,7 +106,7 @@
 		onclick={toggleSheet}
 		role="button"
 		tabindex="0"
-		aria-label={state === 'full' ? 'Minimise panel' : 'Expand panel'}
+		aria-label={value === 'full' ? 'Minimise panel' : 'Expand panel'}
 		onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSheet(); }}
 	>
 		<div class="sheet-pill"></div>

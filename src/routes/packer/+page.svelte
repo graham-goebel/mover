@@ -164,7 +164,7 @@
 <div class="packer-page">
 	<!-- Left sidebar (desktop) / bottom sheet (mobile) -->
 	<div class="left-panel">
-		<BottomSheet bind:state={sheetState} peekHeight={SHEET_PEEK_H}>
+		<BottomSheet bind:value={sheetState} peekHeight={SHEET_PEEK_H}>
 		<div class="packer-header">
 			<h1>Pack Planner</h1>
 		</div>

@@ -30,9 +30,12 @@ export default defineConfig({
 					}
 				]
 			},
-			workbox: {
-				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
-			}
+		workbox: {
+			globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+			// Force the new service worker to activate immediately instead of waiting for tabs to close
+			skipWaiting: true,
+			clientsClaim: true
+		}
 		})
 	],
 	ssr: {
