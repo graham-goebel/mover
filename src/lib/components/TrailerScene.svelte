@@ -4,6 +4,7 @@
 	import type { PackedItem, TrailerPreset } from '$lib/types';
 	import * as THREE from 'three';
 	import { createItemMesh, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
+	import { resolveModelUrl } from '$lib/utils/generate3d';
 	import SceneSetup from './SceneSetup.svelte';
 
 	interface Props {
@@ -62,6 +63,16 @@
 		}
 		return group;
 	}
+
+	// Resolve idb: model URLs to blob: URLs (async, cached per session)
+	const blobUrlCache = new Map<string, string | null>();
+
+	async function resolveUrl(idbUrl: string): Promise<string | null> {
+		if (blobUrlCache.has(idbUrl)) return blobUrlCache.get(idbUrl)!;
+		const url = await resolveModelUrl(idbUrl);
+		blobUrlCache.set(idbUrl, url);
+		return url;
+	}
 </script>
 
 <Canvas>
@@ -111,12 +122,17 @@
 			</T.Mesh>
 
 			{#if packed.item.modelUrl}
-				<!-- GLB from TripoSR: scale to fit the bounding box -->
+				<!-- GLB from depth generation: scale to fit the bounding box -->
 				{#key packed.item.modelUrl}
-					<GLTF
-						url={packed.item.modelUrl}
-						scale={[scl[0], scl[1], scl[2]]}
-					/>
+					{#await resolveUrl(packed.item.modelUrl) then blobUrl}
+						{#if blobUrl}
+							<GLTF url={blobUrl} scale={[scl[0], scl[1], scl[2]]} />
+						{:else}
+							<!-- Fallback if blob URL resolution fails -->
+							{@const shapeMesh = getShapeMesh(packed)}
+							<T is={shapeMesh.clone()} />
+						{/if}
+					{/await}
 				{/key}
 			{:else}
 				<!-- Procedural fallback shape -->

@@ -58,26 +58,16 @@ function createAccordionStore() {
 export const accordionState = createAccordionStore();
 
 // ---------------------------------------------------------------------------
-// TripoSR server availability
+// Depth source detection (replaces triposr server check)
 // ---------------------------------------------------------------------------
-import { checkTriposrHealth } from '$lib/utils/triposr';
+import { isArDepthAvailable } from '$lib/utils/arDepth';
+import { writable as _writable } from 'svelte/store';
 
-function createTriposrStore() {
-	const { subscribe, set } = writable<boolean>(false);
-
-	async function check() {
-		const available = await checkTriposrHealth();
-		set(available);
-		return available;
-	}
-
-	// Recheck every 30s so the button appears/disappears without a page reload
+/** True if the device has LiDAR + WebXR depth-sensing (iPhone 12 Pro+) */
+export const arDepthAvailable = (() => {
+	const { subscribe, set } = _writable(false);
 	if (typeof window !== 'undefined') {
-		check();
-		setInterval(check, 30_000);
+		isArDepthAvailable().then(set);
 	}
-
-	return { subscribe, check };
-}
-
-export const triposrAvailable = createTriposrStore();
+	return { subscribe };
+})();

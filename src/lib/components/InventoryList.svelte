@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { InventoryItem, ItemCategory, ItemShape, Dimensions } from '$lib/types';
 	import { inventory } from '$lib/stores/inventory';
-	import { moveDate, triposrAvailable } from '$lib/stores/app';
+	import { moveDate, arDepthAvailable } from '$lib/stores/app';
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 	import { TRAILER_PRESETS } from '$lib/stores/trailer';
-	import { generateModel } from '$lib/utils/triposr';
+	import { generate3DModel, getDepthSource, type Generate3DStatus } from '$lib/utils/generate3d';
 	import ItemCard from './ItemCard.svelte';
 	import ContentsEditor from './ContentsEditor.svelte';
 	import CameraCapture from './CameraCapture.svelte';
@@ -45,7 +45,10 @@
 	let replacePhotoInput = $state<HTMLInputElement | null>(null);
 	let replacePhotoLoading = $state(false);
 	let generate3dLoading = $state(false);
+	let generate3dStatus = $state<string | null>(null);
+	let generate3dProgress = $state<number | null>(null);
 	let generate3dError = $state<string | null>(null);
+	let generate3dSource = $state<'lidar' | 'ai' | null>(null);
 	let modelUrl = $state<string | null>(null);
 
 	/** Lines for new box/bin items before the item exists in the store */
@@ -238,18 +241,43 @@
 
 	async function handleGenerate3D() {
 		if (!photoUrl) return;
-		generate3dLoading = true;
-		generate3dError = null;
-		const result = await generateModel(photoUrl);
-		generate3dLoading = false;
-		if (result.ok) {
-			modelUrl = result.url;
+		const itemId = editingId ?? `draft-${Date.now()}`;
+		generate3dLoading  = true;
+		generate3dError    = null;
+		generate3dStatus   = null;
+		generate3dProgress = null;
+
+		// Preview the depth source label before starting
+		generate3dSource = await getDepthSource();
+
+		const idbUrl = await generate3DModel(itemId, photoUrl, (s: Generate3DStatus) => {
+			switch (s.type) {
+				case 'status':
+					generate3dStatus = s.message;
+					if (s.source) generate3dSource = s.source;
+					break;
+				case 'progress':
+					generate3dProgress = s.value;
+					break;
+				case 'done':
+					modelUrl = s.idbUrl;
+					generate3dStatus = null;
+					break;
+				case 'error':
+					generate3dError = s.message;
+					break;
+			}
+		});
+
+		generate3dLoading  = false;
+		generate3dProgress = null;
+
+		if (idbUrl) {
+			modelUrl = idbUrl;
 			// Persist immediately if editing an existing item
 			if (editingId) {
-				inventory.update(editingId, { modelUrl: result.url });
+				inventory.update(editingId, { modelUrl: idbUrl });
 			}
-		} else {
-			generate3dError = result.error;
 		}
 	}
 
@@ -504,37 +532,62 @@
 							<button type="button" class="photo-btn danger" onclick={removePhoto}>Remove</button>
 						</div>
 
-						{#if $triposrAvailable}
-							<div class="generate-3d-block">
-								{#if modelUrl}
-									<div class="generate-3d-done">
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-										3D model generated
-										<button type="button" class="regen-btn" onclick={handleGenerate3D} disabled={generate3dLoading}>Regenerate</button>
-									</div>
-								{:else}
-									<button
-										type="button"
-										class="generate-3d-btn"
-										onclick={handleGenerate3D}
-										disabled={generate3dLoading}
-									>
-										{#if generate3dLoading}
-											<span class="gen-spinner"></span>
-											Generating 3D model…
-										{:else}
-											<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-												<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-											</svg>
-											Generate 3D Model
+					{#if true}
+						<div class="generate-3d-block">
+							{#if modelUrl}
+								<div class="generate-3d-done">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+									3D model generated
+									<button type="button" class="regen-btn" onclick={handleGenerate3D} disabled={generate3dLoading}>Regenerate</button>
+								</div>
+							{:else}
+								<button
+									type="button"
+									class="generate-3d-btn"
+									onclick={handleGenerate3D}
+									disabled={generate3dLoading}
+								>
+									{#if generate3dLoading}
+										<span class="gen-spinner"></span>
+										{generate3dStatus ?? 'Starting…'}
+									{:else}
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+										</svg>
+										Generate 3D
+										{#if $arDepthAvailable}
+											<span class="lidar-badge">LiDAR</span>
 										{/if}
-									</button>
-								{/if}
-								{#if generate3dError}
-									<p class="generate-3d-error">{generate3dError}</p>
-								{/if}
-							</div>
-						{/if}
+									{/if}
+								</button>
+							{/if}
+
+							{#if generate3dLoading && generate3dProgress !== null}
+								<div class="gen-progress-bar">
+									<div class="gen-progress-fill" style:width="{generate3dProgress}%"></div>
+								</div>
+								<p class="gen-progress-label">
+									{#if generate3dSource === 'lidar'}
+										<span class="lidar-badge">LiDAR</span>
+									{:else}
+										<span class="ai-badge">AI</span>
+									{/if}
+									{generate3dProgress}% — model download
+								</p>
+							{:else if generate3dLoading && generate3dStatus}
+								<p class="gen-progress-label">
+									{#if generate3dSource === 'lidar'}<span class="lidar-badge">LiDAR</span>
+									{:else if generate3dSource === 'ai'}<span class="ai-badge">AI</span>
+									{/if}
+									{generate3dStatus}
+								</p>
+							{/if}
+
+							{#if generate3dError}
+								<p class="generate-3d-error">{generate3dError}</p>
+							{/if}
+						</div>
+					{/if}
 					{:else}
 						<button class="add-photo-btn" onclick={openPhotoCapture}>
 							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -1068,6 +1121,52 @@
 		font-size: 11px;
 		color: var(--color-danger);
 		line-height: 1.4;
+	}
+
+	.gen-progress-bar {
+		height: 3px;
+		background: var(--color-border);
+		border-radius: 100px;
+		overflow: hidden;
+	}
+
+	.gen-progress-fill {
+		height: 100%;
+		background: var(--color-text);
+		border-radius: 100px;
+		transition: width 0.3s ease;
+	}
+
+	.gen-progress-label {
+		font-size: 11px;
+		color: var(--color-text-muted);
+		display: flex;
+		align-items: center;
+		gap: 5px;
+	}
+
+	.lidar-badge {
+		font-size: 9px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		background: #0ea5e9;
+		color: #fff;
+		padding: 1px 5px;
+		border-radius: 100px;
+		flex-shrink: 0;
+	}
+
+	.ai-badge {
+		font-size: 9px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		background: #8b5cf6;
+		color: #fff;
+		padding: 1px 5px;
+		border-radius: 100px;
+		flex-shrink: 0;
 	}
 
 	.gen-spinner {

@@ -37,5 +37,12 @@ export default defineConfig({
 	],
 	ssr: {
 		noExternal: ['three']
+	},
+	// Prevent Vite from pre-bundling Transformers.js — it uses WASM and dynamic imports
+	optimizeDeps: {
+		exclude: ['@huggingface/transformers']
+	},
+	worker: {
+		format: 'es'
 	}
 });
