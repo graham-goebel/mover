@@ -54,6 +54,16 @@ button {
 	background: none;
 	color: inherit;
 	font-size: inherit;
+	outline: none;
+}
+
+summary {
+	outline: none;
+	list-style: none;
+}
+
+summary::-webkit-details-marker {
+	display: none;
 }
 
 input, textarea, select {

@@ -27,7 +27,7 @@
 		}
 	});
 	loadOrderStep.subscribe((v) => step = v);
-	inventory.subscribe((v) => items = v);
+	inventory.subscribe((v) => items = v.filter(i => !i.forSale));
 
 	function repack() {
 		const toPack = items.filter(i => packedIds.has(i.id));

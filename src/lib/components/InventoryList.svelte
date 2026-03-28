@@ -297,10 +297,9 @@
 	/>
 	<!-- Left sidebar -->
 	<div class="left-panel">
-		<div class="sidebar-header">
+		<div class="sidebar-header" class:sidebar-header-home={sidebarMode === 'home'}>
 			{#if sidebarMode === 'home'}
-				<h2>Overview</h2>
-				<div style="width: 50px"></div>
+				<h1 class="sidebar-title">Overview</h1>
 			{:else if sidebarMode === 'view'}
 				<button class="sidebar-back" onclick={switchToHome} aria-label="Back">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -696,6 +695,16 @@
 		padding: 12px 16px;
 		border-bottom: 1px solid var(--color-border);
 		flex-shrink: 0;
+	}
+
+	.sidebar-header-home {
+		padding: 16px;
+		border-bottom: none;
+	}
+
+	.sidebar-title {
+		font-size: 28px;
+		font-weight: 700;
 	}
 
 	.sidebar-header h2 {
