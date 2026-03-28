@@ -12,8 +12,8 @@
 	let items = $state<InventoryItem[]>([]);
 	let filterCategory = $state<ItemCategory | 'all'>('all');
 
-	type SidebarMode = 'add' | 'view' | 'edit' | 'photo';
-	let sidebarMode = $state<SidebarMode>('add');
+	type SidebarMode = 'home' | 'add' | 'view' | 'edit' | 'photo';
+	let sidebarMode = $state<SidebarMode>('home');
 	let editingId = $state<string | null>(null);
 
 	let name = $state('');
@@ -96,6 +96,12 @@
 		showDeleteConfirm = false;
 	}
 
+	function switchToHome() {
+		editingId = null;
+		sidebarMode = 'home';
+		resetForm();
+	}
+
 	function switchToAdd() {
 		editingId = null;
 		sidebarMode = 'add';
@@ -148,7 +154,7 @@
 			contents: [],
 			notes: notes || undefined
 		});
-		resetForm();
+		switchToHome();
 	}
 
 	function handleSave() {
@@ -163,13 +169,13 @@
 			stackable,
 			notes: notes || undefined
 		});
-		switchToAdd();
+		switchToHome();
 	}
 
 	function handleDelete() {
 		if (!editingId) return;
 		inventory.remove(editingId);
-		switchToAdd();
+		switchToHome();
 	}
 
 	function openPhotoCapture() {
@@ -215,14 +221,17 @@
 	<!-- Left sidebar -->
 	<div class="left-panel">
 		<div class="sidebar-header">
-			{#if sidebarMode === 'view'}
-				<button class="sidebar-back" onclick={switchToAdd} aria-label="Back to add">
+			{#if sidebarMode === 'home'}
+				<h2>Overview</h2>
+				<div style="width: 50px"></div>
+			{:else if sidebarMode === 'view'}
+				<button class="sidebar-back" onclick={switchToHome} aria-label="Back">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
 				</button>
 				<h2>Item Details</h2>
 				<button class="sidebar-action" onclick={startEditing}>Edit</button>
 			{:else if sidebarMode === 'edit'}
-				<button class="sidebar-back" onclick={() => editingId ? switchToView(editingId) : switchToAdd()} aria-label="Cancel edit">
+				<button class="sidebar-back" onclick={() => editingId ? switchToView(editingId) : switchToHome()} aria-label="Cancel edit">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
 				</button>
 				<h2>Edit Item</h2>
@@ -234,13 +243,55 @@
 				<h2>Add Photo</h2>
 				<div style="width: 50px"></div>
 			{:else}
+				<button class="sidebar-back" onclick={switchToHome} aria-label="Back">
+					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+				</button>
 				<h2>Add Item</h2>
 				<button class="sidebar-action" onclick={handleAdd} disabled={!name.trim()}>Add</button>
 			{/if}
 		</div>
 
 		<div class="sidebar-scroll">
-			{#if sidebarMode === 'view' && editingItem}
+			{#if sidebarMode === 'home'}
+				<div class="home-panel">
+					<div class="home-stats">
+						<div class="home-stat">
+							<span class="home-stat-val">{items.length}</span>
+							<span class="home-stat-label">Items</span>
+						</div>
+						<div class="home-stat">
+							<span class="home-stat-val">{totalWeight > 0 ? totalWeight : '—'}</span>
+							<span class="home-stat-label">{totalWeight > 0 ? 'lbs' : 'Weight'}</span>
+						</div>
+						<div class="home-stat">
+							<span class="home-stat-val">{totalVolume > 0 ? Math.round(totalVolume * 10) / 10 : '—'}</span>
+							<span class="home-stat-label">cu ft</span>
+						</div>
+					</div>
+
+					<div class="home-date">
+						<span class="home-date-label">Move Date</span>
+						<input
+							type="date"
+							class="home-date-input"
+							value={moveDateVal ?? ''}
+							oninput={(e) => moveDate.set(e.currentTarget.value || null)}
+						/>
+						{#if daysUntilMove !== null}
+							<span class="home-date-countdown" class:urgent={daysUntilMove <= 7}>
+								{daysUntilMove} {daysUntilMove === 1 ? 'day' : 'days'} away
+							</span>
+						{/if}
+					</div>
+
+					<button class="home-add-btn" onclick={switchToAdd}>
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+							<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+						</svg>
+						Add Item
+					</button>
+				</div>
+			{:else if sidebarMode === 'view' && editingItem}
 				{@const item = editingItem}
 				<div class="view-panel">
 					{#if item.photo && !item.photo.includes('data:image/svg+xml')}
@@ -447,47 +498,14 @@
 	<!-- Right: inventory list -->
 	<div class="right-panel">
 		<div class="inv-scroll">
-			<!-- My Move stats -->
-			<div class="move-section">
-				<div class="move-header">
-					<h1>My Move</h1>
-					<div class="move-date-wrap">
-						<input
-							type="date"
-							class="move-date-input"
-							value={moveDateVal ?? ''}
-							oninput={(e) => moveDate.set(e.currentTarget.value || null)}
-						/>
-					</div>
-				</div>
-				<div class="move-stats">
-					<div class="move-stat">
-						<span class="move-stat-val">{items.length}</span>
-						<span class="move-stat-label">Items</span>
-					</div>
-					<div class="move-stat">
-						<span class="move-stat-val">{totalWeight > 0 ? totalWeight : '—'}</span>
-						<span class="move-stat-label">{totalWeight > 0 ? 'lbs' : 'Weight'}</span>
-					</div>
-					<div class="move-stat">
-						<span class="move-stat-val">{totalVolume > 0 ? Math.round(totalVolume * 10) / 10 : '—'}</span>
-						<span class="move-stat-label">cu ft</span>
-					</div>
-					<div class="move-stat">
-						{#if daysUntilMove !== null}
-							<span class="move-stat-val" class:urgent={daysUntilMove <= 7}>{daysUntilMove}</span>
-							<span class="move-stat-label">{daysUntilMove === 1 ? 'day' : 'days'}</span>
-						{:else}
-							<span class="move-stat-val dim">—</span>
-							<span class="move-stat-label">Set date</span>
-						{/if}
-					</div>
-				</div>
-			</div>
-
 			<header class="inv-header">
 				<div class="header-top">
-					<h2 class="items-heading">My Items</h2>
+					<h1>My Items</h1>
+					<div class="header-stats">
+						<span class="stat">{items.length} items</span>
+						<span class="stat-dot">·</span>
+						<span class="stat">{Math.round(totalVolume * 10) / 10} cu ft</span>
+					</div>
 				</div>
 
 				<div class="filter-row">
@@ -970,73 +988,98 @@
 	.cancel-delete { border: 1px solid var(--color-border); }
 	.confirm-delete { background: var(--color-danger); color: white; }
 
-	/* My Move section */
-	.move-section {
-		padding: 20px 0 16px;
-		border-bottom: 1px solid var(--color-border);
-		margin-bottom: 4px;
-	}
-
-	.move-header {
+	/* Home panel (sidebar default) */
+	.home-panel {
+		padding: 20px 16px;
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		margin-bottom: 16px;
+		flex-direction: column;
+		gap: 20px;
 	}
 
-	.move-header h1 {
-		font-size: 28px;
-		font-weight: 700;
-	}
-
-	.move-date-input {
-		font-size: 13px;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		background: var(--color-bg-card);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		padding: 5px 10px;
-		color-scheme: dark;
-	}
-
-	.move-stats {
+	.home-stats {
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(3, 1fr);
 		gap: 10px;
 	}
 
-	.move-stat {
+	.home-stat {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 2px;
-		padding: 14px 8px;
+		padding: 16px 8px;
 		background: var(--color-bg-card);
 		border-radius: var(--radius-md);
 		border: 1px solid var(--color-border);
 	}
 
-	.move-stat-val {
+	.home-stat-val {
 		font-size: 28px;
 		font-weight: 700;
 		line-height: 1;
 	}
 
-	.move-stat-val.urgent {
-		color: var(--color-warning);
-	}
-
-	.move-stat-val.dim {
-		color: var(--color-text-muted);
-	}
-
-	.move-stat-label {
+	.home-stat-label {
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--color-text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
+	}
+
+	.home-date {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.home-date-label {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.home-date-input {
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--color-text);
+		background: var(--color-bg-card);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: 10px 12px;
+		color-scheme: dark;
+		width: 100%;
+	}
+
+	.home-date-countdown {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+	}
+
+	.home-date-countdown.urgent {
+		color: var(--color-warning);
+	}
+
+	.home-add-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		width: 100%;
+		padding: 14px;
+		background: var(--color-accent);
+		color: var(--color-accent-fg);
+		font-size: 16px;
+		font-weight: 600;
+		border-radius: var(--radius-md);
+		transition: background 0.15s;
+	}
+
+	.home-add-btn:active {
+		background: var(--color-accent-hover);
 	}
 
 	/* Inventory header */
@@ -1045,7 +1088,7 @@
 		top: 0;
 		background: var(--color-bg);
 		z-index: 10;
-		padding: 12px 0;
+		padding: 16px 0 12px;
 	}
 
 	.header-top {
@@ -1055,10 +1098,24 @@
 		margin-bottom: 10px;
 	}
 
-	.items-heading {
-		font-size: 18px;
-		font-weight: 600;
+	h1 {
+		font-size: 28px;
+		font-weight: 700;
 	}
+
+	.header-stats {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.stat {
+		font-size: 14px;
+		color: var(--color-text-secondary);
+		font-weight: 500;
+	}
+
+	.stat-dot { color: var(--color-text-muted); }
 
 	.filter-row {
 		display: flex;
