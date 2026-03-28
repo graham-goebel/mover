@@ -255,6 +255,15 @@
 		switchToHome();
 	}
 
+	function handleDuplicate() {
+		if (!editingId) return;
+		const newId = inventory.duplicate(editingId);
+		if (!newId) return;
+		// Open the copy in edit mode so the user can immediately rename/change it
+		switchToView(newId);
+		startEditing();
+	}
+
 	function openPhotoCapture() {
 		sidebarMode = 'photo';
 		photoStep = 'capture';
@@ -523,13 +532,23 @@
 						</div>
 					{/if}
 
-					{#if item.notes}
-						<div class="view-section">
-							<span class="view-section-label">Notes</span>
-							<p class="view-notes">{item.notes}</p>
-						</div>
-					{/if}
+				{#if item.notes}
+					<div class="view-section">
+						<span class="view-section-label">Notes</span>
+						<p class="view-notes">{item.notes}</p>
+					</div>
+				{/if}
+
+				<div class="view-actions">
+					<button class="view-action-btn" onclick={handleDuplicate}>
+						<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+							<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+						</svg>
+						Duplicate &amp; Edit
+					</button>
 				</div>
+			</div>
 			{:else if sidebarMode === 'photo'}
 				{#if photoStep === 'capture'}
 					<div class="photo-capture-area">
@@ -1055,6 +1074,33 @@
 		color: var(--color-text-secondary);
 		line-height: 1.5;
 		margin: 0;
+	}
+
+	.view-actions {
+		margin-top: 4px;
+		padding-top: 12px;
+		border-top: 1px solid var(--color-border);
+	}
+
+	.view-action-btn {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		padding: 11px 16px;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		background: transparent;
+		transition: background 0.15s, color 0.15s;
+	}
+
+	.view-action-btn:active {
+		background: var(--color-accent-soft);
+		color: var(--color-text);
 	}
 
 	/* Photo section */

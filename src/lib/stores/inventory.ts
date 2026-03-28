@@ -50,6 +50,29 @@ function createInventoryStore() {
 			persist((items) => items.filter((it) => it.id !== id));
 		},
 
+		duplicate(id: string): string {
+			let newId = '';
+			persist((items) => {
+				const src = items.find((it) => it.id === id);
+				if (!src) return items;
+				newId = createId();
+				const copy = {
+					...src,
+					id: newId,
+					name: `${src.name} (copy)`,
+					createdAt: Date.now(),
+					// Don't copy generated 3D model URL — it stays with the original item
+					modelUrl: undefined
+				};
+				// Insert the copy right after the original
+				const idx = items.indexOf(src);
+				const next = [...items];
+				next.splice(idx + 1, 0, copy);
+				return next;
+			});
+			return newId;
+		},
+
 		addContent(id: string, content: string) {
 			persist((items) =>
 				items.map((it) =>
