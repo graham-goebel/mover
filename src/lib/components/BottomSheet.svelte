@@ -141,8 +141,8 @@
 		bottom: 0;
 		z-index: 200;
 
-		/* Fill viewport minus tab bar */
-		height: calc(100dvh - var(--tab-bar-height, 88px) - env(safe-area-inset-top, 0px));
+		/* Fill viewport from just below the top navbar to the screen bottom */
+		height: calc(100dvh - var(--tab-bar-height, 88px));
 
 		background: var(--color-bg);
 		border-radius: 12px 12px 0 0;

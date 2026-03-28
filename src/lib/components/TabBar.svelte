@@ -60,13 +60,16 @@
 <style>
 	.tab-bar {
 		position: fixed;
-		bottom: 0;
+		/* Mobile: top of screen — avoids conflicts with bottom sheet */
+		top: 0;
+		bottom: auto;
 		left: 0;
 		right: 0;
 		display: flex;
 		justify-content: center;
 		padding: 0 20px;
-		padding-bottom: calc(12px + var(--safe-area-bottom));
+		padding-top: calc(8px + env(safe-area-inset-top, 0px));
+		padding-bottom: 8px;
 		z-index: 50;
 		pointer-events: none;
 	}
@@ -119,5 +122,15 @@
 		font-size: 10px;
 		font-weight: 500;
 		letter-spacing: 0.02em;
+	}
+
+	/* Desktop: move back to bottom */
+	@media (min-width: 768px) {
+		.tab-bar {
+			top: auto;
+			bottom: 0;
+			padding-top: 0;
+			padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+		}
 	}
 </style>

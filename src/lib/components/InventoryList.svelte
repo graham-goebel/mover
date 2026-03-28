@@ -1541,8 +1541,8 @@
 		z-index: 210; /* above the sheet */
 		left: 16px;
 		right: 16px;
-		/* On mobile, float just above the peek strip (tab-bar + peek height) */
-		bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 72px + 8px);
+		/* On mobile: float just above the peek strip + bottom safe area */
+		bottom: calc(72px + var(--safe-area-bottom) + 8px);
 		display: flex;
 		align-items: center;
 		justify-content: center;

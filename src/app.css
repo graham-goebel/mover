@@ -27,8 +27,16 @@
 	--shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
 	--shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
 	--font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-	--tab-bar-height: 88px;
+	/* Mobile: navbar is at top — height = pill (~56px) + safe-area-top */
+	--tab-bar-height: calc(56px + env(safe-area-inset-top, 0px));
 	--safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Desktop: navbar at bottom — height = pill (~60px) + safe-area-bottom */
+@media (min-width: 768px) {
+	:root {
+		--tab-bar-height: calc(60px + env(safe-area-inset-bottom, 0px));
+	}
 }
 
 * {

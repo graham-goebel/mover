@@ -32,5 +32,14 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		-webkit-overflow-scrolling: touch;
+		/* Mobile: push content below the top navbar */
+		padding-top: var(--tab-bar-height);
+	}
+
+	@media (min-width: 768px) {
+		.app-main {
+			/* Desktop: navbar is at bottom, no top padding needed */
+			padding-top: 0;
+		}
 	}
 </style>
