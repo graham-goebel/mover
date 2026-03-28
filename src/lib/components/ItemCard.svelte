@@ -121,7 +121,6 @@
 		width: 100%;
 		padding: 12px;
 		background: var(--color-bg-card);
-		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		text-align: left;
 		position: relative;
