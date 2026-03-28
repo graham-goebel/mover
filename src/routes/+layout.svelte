@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import TabBar from '$lib/components/TabBar.svelte';
+	import SettingsSheet from '$lib/components/SettingsSheet.svelte';
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
 
@@ -17,6 +18,7 @@
 		{@render children()}
 	</main>
 	<TabBar {tabs} currentPath={$page.url.pathname} />
+	<SettingsSheet />
 </div>
 
 <style>

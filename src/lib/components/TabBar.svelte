@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { settingsOpen } from '$lib/stores/app';
+
 	interface Tab {
 		href: string;
 		label: string;
@@ -38,11 +40,6 @@
 							<polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
 							<line x1="12" y1="22.08" x2="12" y2="12"/>
 						</svg>
-					{:else if tab.icon === 'add'}
-						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-							<circle cx="12" cy="13" r="4"/>
-						</svg>
 					{:else if tab.icon === 'pack'}
 						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
 							<rect x="1" y="3" width="15" height="13" rx="2" ry="2"/>
@@ -54,6 +51,21 @@
 				<span class="tab-label">{tab.label}</span>
 			</a>
 		{/each}
+
+		<!-- Settings button — separated by a thin divider -->
+		<div class="tab-divider"></div>
+		<button
+			class="tab settings-tab"
+			onclick={() => settingsOpen.update(v => !v)}
+			aria-label="Settings"
+		>
+			<div class="tab-icon">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="3"/>
+					<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+				</svg>
+			</div>
+		</button>
 	</div>
 </nav>
 
@@ -90,6 +102,15 @@
 		pointer-events: auto;
 	}
 
+	/* Light mode: flip glass to white-frosted */
+	:global([data-theme="light"]) .tab-pill {
+		background: rgba(255, 255, 255, 0.75);
+		border-color: rgba(0, 0, 0, 0.08);
+		box-shadow:
+			0 4px 24px rgba(0, 0, 0, 0.1),
+			0 0 0 0.5px rgba(0, 0, 0, 0.04) inset;
+	}
+
 	.tab {
 		flex: 1;
 		display: flex;
@@ -105,9 +126,18 @@
 		position: relative;
 	}
 
+	:global([data-theme="light"]) .tab {
+		color: rgba(0, 0, 0, 0.35);
+	}
+
 	.tab.active {
 		color: #fafafa;
 		background: rgba(255, 255, 255, 0.1);
+	}
+
+	:global([data-theme="light"]) .tab.active {
+		color: #09090b;
+		background: rgba(0, 0, 0, 0.07);
 	}
 
 	.tab-icon {
@@ -122,6 +152,33 @@
 		font-size: 10px;
 		font-weight: 500;
 		letter-spacing: 0.02em;
+	}
+
+	/* Settings button — no label, slightly smaller icon */
+	.settings-tab {
+		padding: 8px 10px;
+		color: rgba(255, 255, 255, 0.35);
+	}
+
+	:global([data-theme="light"]) .settings-tab {
+		color: rgba(0, 0, 0, 0.3);
+	}
+
+	.settings-tab:active {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	/* Thin vertical divider before settings button */
+	.tab-divider {
+		width: 1px;
+		height: 20px;
+		background: rgba(255, 255, 255, 0.12);
+		margin: 0 2px;
+		flex-shrink: 0;
+	}
+
+	:global([data-theme="light"]) .tab-divider {
+		background: rgba(0, 0, 0, 0.1);
 	}
 
 	/* Desktop: move back to bottom */

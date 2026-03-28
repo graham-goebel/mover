@@ -5,6 +5,43 @@ export const editingItemId = writable<string | null>(null);
 export const measurementPhoto = writable<string | null>(null);
 
 // ---------------------------------------------------------------------------
+// Theme — persisted to localStorage, applied via data-theme on <html>
+// ---------------------------------------------------------------------------
+const THEME_KEY = 'mover_theme';
+export type Theme = 'dark' | 'light';
+
+function createThemeStore() {
+	const initial: Theme =
+		typeof localStorage !== 'undefined'
+			? ((localStorage.getItem(THEME_KEY) as Theme | null) ?? 'dark')
+			: 'dark';
+
+	const { subscribe, set: _set } = writable<Theme>(initial);
+
+	// Apply immediately on client (catches page loads after app.html script)
+	if (typeof document !== 'undefined') {
+		document.documentElement.setAttribute('data-theme', initial);
+	}
+
+	function set(value: Theme) {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(THEME_KEY, value);
+		}
+		if (typeof document !== 'undefined') {
+			document.documentElement.setAttribute('data-theme', value);
+		}
+		_set(value);
+	}
+
+	return { subscribe, set };
+}
+
+export const theme = createThemeStore();
+
+/** Controls the settings sheet visibility */
+export const settingsOpen = writable(false);
+
+// ---------------------------------------------------------------------------
 // Move date — persisted to localStorage
 // ---------------------------------------------------------------------------
 const MOVE_DATE_KEY = 'mover_move_date';
