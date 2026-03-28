@@ -1,8 +1,12 @@
 import { writable } from 'svelte/store';
+import { isArDepthAvailable } from '$lib/utils/arDepth';
 
 export const editingItemId = writable<string | null>(null);
 export const measurementPhoto = writable<string | null>(null);
 
+// ---------------------------------------------------------------------------
+// Move date — persisted to localStorage
+// ---------------------------------------------------------------------------
 const MOVE_DATE_KEY = 'mover_move_date';
 
 function loadMoveDate(): string | null {
@@ -26,6 +30,9 @@ function createMoveDateStore() {
 
 export const moveDate = createMoveDateStore();
 
+// ---------------------------------------------------------------------------
+// Accordion open/closed states — persisted to localStorage
+// ---------------------------------------------------------------------------
 const ACCORDION_KEY = 'mover_accordions';
 
 function loadAccordionState(): Record<string, boolean> {
@@ -58,16 +65,16 @@ function createAccordionStore() {
 export const accordionState = createAccordionStore();
 
 // ---------------------------------------------------------------------------
-// Depth source detection (replaces triposr server check)
+// LiDAR / WebXR depth-sensing availability
 // ---------------------------------------------------------------------------
-import { isArDepthAvailable } from '$lib/utils/arDepth';
-import { writable as _writable } from 'svelte/store';
 
 /** True if the device has LiDAR + WebXR depth-sensing (iPhone 12 Pro+) */
-export const arDepthAvailable = (() => {
-	const { subscribe, set } = _writable(false);
+function createArDepthStore() {
+	const { subscribe, set } = writable(false);
 	if (typeof window !== 'undefined') {
 		isArDepthAvailable().then(set);
 	}
 	return { subscribe };
-})();
+}
+
+export const arDepthAvailable = createArDepthStore();
