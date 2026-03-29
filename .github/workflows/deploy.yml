@@ -25,8 +25,8 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PUBLIC_SUPABASE_URL: https://qdtzvewcbsqrjauarcku.supabase.co
+          PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkdHp2ZXdjYnNxcmphdWFyY2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MDcxOTMsImV4cCI6MjA5MDM4MzE5M30.jI0ZThydv74R4iOZ8asMOX93XKZqNzP42rLItClzg2A
       - run: cp build/index.html build/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
