@@ -4,8 +4,6 @@
 	import { inventory } from '$lib/stores/inventory';
 	import { packItems } from '$lib/utils/packing';
 	import { SHAPE_OPTIONS } from '$lib/utils/shapes';
-	import { accordionState } from '$lib/stores/app';
-	import PackControls from '$lib/components/PackControls.svelte';
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
 	import BottomSheet from '$lib/components/BottomSheet.svelte';
 
@@ -13,9 +11,29 @@
 	let result = $state<PackResult | null>(null);
 	let step = $state(0);
 	let selectedItemId = $state<string | null>(null);
-	let showControls = $state(true);
 	let items = $state<InventoryItem[]>([]);
 	let packedIds = $state(new Set<string>());
+
+	type PackerTab = 'inventory' | 'stats';
+	let activeTab = $state<PackerTab>('inventory');
+
+	let trailerDropdownOpen = $state(false);
+	let showCustomTrailer = $state(false);
+	let customLength = $state(12);
+	let customWidth = $state(6);
+	let customHeight = $state(6.5);
+
+	function selectPreset(preset: TrailerPreset) {
+		trailer.select(preset);
+		showCustomTrailer = false;
+		trailerDropdownOpen = false;
+	}
+
+	function applyCustomTrailer() {
+		trailer.setCustom(customLength, customWidth, customHeight);
+		showCustomTrailer = false;
+		trailerDropdownOpen = false;
+	}
 
 	// Mobile bottom-sheet state — auto-opens when an item is selected
 	let sheetState = $state<'peek' | 'full'>('peek');
@@ -36,7 +54,6 @@
 			]);
 		}
 	});
-	loadOrderStep.subscribe((v) => step = v);
 	inventory.subscribe((v) => items = v.filter(i => !i.forSale));
 
 	function repack() {
@@ -156,6 +173,30 @@
 		liveResult?.placed.filter(p => p.item.id !== selectedItemId) ?? []
 	);
 
+	const CU_IN_PER_CU_FT = 1728;
+	const containerCuFt = $derived(currentTrailer.length * currentTrailer.width * currentTrailer.height);
+	const usedCuFt = $derived.by(() => {
+		if (!result) return 0;
+		return result.placed.reduce((s, p) => s + (p.rotation.l * p.rotation.w * p.rotation.h) / CU_IN_PER_CU_FT, 0);
+	});
+	const spaceLeftCuFt = $derived(Math.max(0, containerCuFt - usedCuFt));
+	const volBarPct = $derived(result ? Math.min(100, Math.max(0, result.utilization)) : 0);
+	const payloadLbs = $derived(Math.max(1, currentTrailer.payloadLbs ?? 2500));
+	const placedWeightLbs = $derived.by(() => {
+		if (!result) return 0;
+		return result.placed.reduce((s, p) => s + (p.item.weight ?? 0), 0);
+	});
+	const weightUtilPct = $derived(payloadLbs > 0 ? (placedWeightLbs / payloadLbs) * 100 : 0);
+	const weightBarPct = $derived(Math.min(100, Math.max(0, weightUtilPct)));
+	const weightLeftLbs = $derived(payloadLbs - placedWeightLbs);
+	const placedWithoutWeight = $derived.by(() => {
+		if (!result) return 0;
+		return result.placed.filter(p => p.item.weight == null || p.item.weight <= 0).length;
+	});
+	function fmtCuFt(n: number): string {
+		return n >= 10 ? `${Math.round(n)}` : `${Math.round(n * 10) / 10}`;
+	}
+
 	const NUDGE_SMALL = 1;   // inches
 	const NUDGE_LARGE = 6;
 
@@ -227,10 +268,79 @@
 			<h1>Pack Planner</h1>
 		</div>
 
+		<div class="packer-tabs">
+			<button class="packer-tab" class:active={activeTab === 'inventory'} onclick={() => activeTab = 'inventory'}>
+				Inventory
+			</button>
+			<button class="packer-tab" class:active={activeTab === 'stats'} onclick={() => activeTab = 'stats'}>
+				Stats
+			</button>
+		</div>
+
 		<div class="panel-scroll">
-			<div class="controls-panel">
-				<PackControls />
-			</div>
+			{#if activeTab === 'stats'}
+				<div class="stats-panel">
+					{#if result}
+						<div class="pack-stats">
+							<div class="pack-stat">
+								<span class="pack-stat-val">{result.placed.length}</span>
+								<span class="pack-stat-label">Placed</span>
+							</div>
+							<div class="pack-stat">
+								<span class="pack-stat-val warn">{result.unplaced.length}</span>
+								<span class="pack-stat-label">Won't fit</span>
+							</div>
+						</div>
+
+						<div class="pack-bars">
+							<div class="cap-bar-block">
+								<div class="cap-bar-header">
+									<span class="cap-bar-title">Space</span>
+									<span class="cap-bar-meta">
+										{result.utilization}% used · <strong>{fmtCuFt(spaceLeftCuFt)} cu ft</strong> left
+									</span>
+								</div>
+								<div class="cap-bar-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.min(100, result.utilization))} aria-label="Trailer space used">
+									<div class="cap-bar-fill vol" style:width="{volBarPct}%"></div>
+								</div>
+							</div>
+
+							<div class="cap-bar-block">
+								<div class="cap-bar-header">
+									<span class="cap-bar-title">Weight</span>
+									<span class="cap-bar-meta">
+										{Math.round(placedWeightLbs)} / {payloadLbs} lbs
+										{#if weightLeftLbs >= 0}
+											· <strong>{Math.round(weightLeftLbs)} lbs</strong> left
+										{:else}
+											· <strong class="over">{Math.round(-weightLeftLbs)} lbs</strong> over
+										{/if}
+									</span>
+								</div>
+								<div class="cap-bar-track" class:over-cap={weightUtilPct > 100} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.min(100, weightUtilPct))} aria-label="Trailer weight versus payload limit">
+									<div class="cap-bar-fill weight" style:width="{weightBarPct}%"></div>
+								</div>
+								{#if placedWithoutWeight > 0}
+									<p class="cap-bar-hint">{placedWithoutWeight} item{placedWithoutWeight === 1 ? '' : 's'} missing weight</p>
+								{/if}
+							</div>
+						</div>
+
+						{#if result.unplaced.length > 0}
+							<div class="unplaced-list">
+								<p class="unplaced-title">Items that didn't fit:</p>
+								{#each result.unplaced as item}
+									<span class="unplaced-item">{item.name}</span>
+								{/each}
+							</div>
+						{/if}
+					{:else}
+						<div class="stats-empty">
+							<p>Add items to the trailer to see stats</p>
+						</div>
+					{/if}
+				</div>
+			{:else}
 
 			{#if selectedPacked}
 				{@const item = selectedPacked.item}
@@ -378,29 +488,72 @@
 					</div>
 				</details>
 			{/if}
+			{/if}
 		</div>
 		</BottomSheet>
 	</div>
 
 	<!-- Right: 3D scene -->
 	<div class="right-panel">
-		<!-- Mobile-only toggle -->
-		<button class="toggle-panel" onclick={() => showControls = !showControls}>
-			<svg
-				width="16" height="16" viewBox="0 0 24 24" fill="none"
-				stroke="currentColor" stroke-width="2" stroke-linecap="round"
-				style="transform: rotate({showControls ? '180deg' : '0deg'}); transition: transform 0.2s"
-			>
-				<polyline points="6 9 12 15 18 9"/>
-			</svg>
-			{showControls ? 'Hide Controls' : 'Show Controls'}
-		</button>
+		<!-- Floating trailer dropdown (top-right) -->
+		<div class="trailer-float">
+			<button class="trailer-float-btn" onclick={() => trailerDropdownOpen = !trailerDropdownOpen}>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<rect x="1" y="3" width="15" height="13" rx="2" ry="2"/>
+					<path d="M16 8h4l3 3v5h-7V8z"/>
+					<circle cx="5.5" cy="18.5" r="2.5"/>
+					<circle cx="18.5" cy="18.5" r="2.5"/>
+				</svg>
+				<span>{currentTrailer.name}</span>
+				<svg class="trailer-float-chevron" class:open={trailerDropdownOpen} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+			</button>
+			{#if trailerDropdownOpen}
+				<button class="trailer-float-backdrop" onclick={() => { trailerDropdownOpen = false; showCustomTrailer = false; }} aria-label="Close dropdown"></button>
+				<div class="trailer-dropdown">
+					{#each TRAILER_PRESETS as preset}
+						<button
+							class="trailer-option"
+							class:active={currentTrailer.name === preset.name}
+							onclick={() => selectPreset(preset)}
+						>
+							<span class="trailer-option-name">{preset.name}</span>
+							<span class="trailer-option-dims">{preset.length}' × {preset.width}' × {preset.height}'</span>
+						</button>
+					{/each}
+					<button
+						class="trailer-option"
+						class:active={currentTrailer.name === 'Custom'}
+						onclick={() => showCustomTrailer = !showCustomTrailer}
+					>
+						<span class="trailer-option-name">Custom</span>
+						<span class="trailer-option-dims">Set your own</span>
+					</button>
+					{#if showCustomTrailer}
+						<div class="trailer-custom-row">
+							<label class="trailer-custom-field">
+								<span>L</span>
+								<input type="number" bind:value={customLength} min="1" step="0.5" inputmode="decimal" />
+							</label>
+							<label class="trailer-custom-field">
+								<span>W</span>
+								<input type="number" bind:value={customWidth} min="1" step="0.5" inputmode="decimal" />
+							</label>
+							<label class="trailer-custom-field">
+								<span>H</span>
+								<input type="number" bind:value={customHeight} min="1" step="0.5" inputmode="decimal" />
+							</label>
+							<button class="trailer-custom-apply" onclick={applyCustomTrailer}>Set</button>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
 
 		<div class="scene-area">
 			<TrailerScene
 				trailer={currentTrailer}
 				packedItems={liveResult?.placed ?? []}
-				loadStep={step}
+				loadStep={0}
 				{selectedItemId}
 				onSelectItem={(id) => selectedItemId = id}
 			/>

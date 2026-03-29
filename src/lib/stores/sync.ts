@@ -23,34 +23,16 @@ let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 // ── Initial data sync on login ────────────────────────────────────────────────
 
 export async function syncUserData(userId: string) {
-	if (syncedUserId === userId) return; // already synced this session
+	if (syncedUserId === userId) return;
 	syncedUserId = userId;
 
-	// 1. Pull remote inventory
 	const remoteItems = await fetchInventory(userId);
 
 	if (remoteItems.length > 0) {
-		// Remote has data — use it as source of truth, then push any local-only items
-		let localItems: InventoryItem[] = [];
-		const unsub = inventory.subscribe((v) => (localItems = v));
-		unsub();
-
-		const remoteIds = new Set(remoteItems.map((it) => it.id));
-		const localOnly = localItems.filter((it) => !remoteIds.has(it.id));
-
-		// Set store to remote items first
+		// Remote is authoritative — replace local store entirely
 		inventory.setAll(remoteItems);
-
-		// Push any local-only items up
-		for (const item of localOnly) {
-			await upsertItem(userId, item);
-		}
-		if (localOnly.length > 0) {
-			// Re-merge into store
-			inventory.setAll([...remoteItems, ...localOnly]);
-		}
 	} else {
-		// Remote is empty — push current local inventory up
+		// Remote is empty (first sign-in) — migrate local items up to Supabase
 		let localItems: InventoryItem[] = [];
 		const unsub = inventory.subscribe((v) => (localItems = v));
 		unsub();
