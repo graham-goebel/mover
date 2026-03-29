@@ -155,7 +155,65 @@
 	const otherPacked = $derived(
 		liveResult?.placed.filter(p => p.item.id !== selectedItemId) ?? []
 	);
+
+	const NUDGE_SMALL = 1;   // inches
+	const NUDGE_LARGE = 6;
+
+	function nudgeItem(axis: 'x' | 'y' | 'z', delta: number) {
+		if (!result || !selectedItemId) return;
+		const src = result.placed.find(p => p.item.id === selectedItemId);
+		if (!src) return;
+
+		const maxX = currentTrailer.length * 12 - src.rotation.l;
+		const maxY = currentTrailer.height * 12 - src.rotation.h;
+		const maxZ = currentTrailer.width * 12 - src.rotation.w;
+
+		const newPos = { ...src.position };
+		newPos[axis] = Math.max(0, Math.min(
+			axis === 'x' ? maxX : axis === 'y' ? maxY : maxZ,
+			newPos[axis] + delta
+		));
+
+		const updated: PackResult = {
+			...result,
+			placed: result.placed.map(p =>
+				p.item.id === selectedItemId ? { ...p, position: newPos } : p
+			)
+		};
+		packResult.set(updated);
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (!selectedItemId) return;
+		const target = e.target as HTMLElement;
+		if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+		const step = e.shiftKey ? NUDGE_LARGE : NUDGE_SMALL;
+
+		switch (e.key) {
+			case 'ArrowLeft':
+				nudgeItem('x', -step);
+				break;
+			case 'ArrowRight':
+				nudgeItem('x', step);
+				break;
+			case 'ArrowUp':
+				nudgeItem(e.altKey ? 'y' : 'z', e.altKey ? step : -step);
+				break;
+			case 'ArrowDown':
+				nudgeItem(e.altKey ? 'y' : 'z', e.altKey ? -step : step);
+				break;
+			case 'Escape':
+				selectedItemId = null;
+				break;
+			default:
+				return;
+		}
+		e.preventDefault();
+	}
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
 	<title>Mover — Pack Planner</title>
