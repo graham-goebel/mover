@@ -36,6 +36,21 @@ function save(items: InventoryItem[]) {
 function createInventoryStore() {
 	const { subscribe, update, set } = writable<InventoryItem[]>(load());
 
+	// Lazy import sync to avoid circular deps at module init time
+	async function remoteupsert(item: InventoryItem) {
+		try {
+			const { syncItemUpsert } = await import('$lib/stores/sync');
+			syncItemUpsert(item);
+		} catch { /* offline or not authed */ }
+	}
+
+	async function remotedelete(id: string) {
+		try {
+			const { syncItemDelete } = await import('$lib/stores/sync');
+			syncItemDelete(id);
+		} catch { /* offline or not authed */ }
+	}
+
 	function persist(fn: (items: InventoryItem[]) => InventoryItem[]) {
 		update((items) => {
 			const next = fn(items);
@@ -48,62 +63,118 @@ function createInventoryStore() {
 		subscribe,
 
 		add(item: Omit<InventoryItem, 'id' | 'createdAt'>) {
-			persist((items) => [
-				{ ...item, id: createId(), createdAt: Date.now() },
-				...items
-			]);
+			const newItem = { ...item, id: createId(), createdAt: Date.now() };
+			persist((items) => [newItem, ...items]);
+			remoteupsert(newItem);
 		},
 
 		update(id: string, partial: Partial<InventoryItem>) {
-			persist((items) =>
-				items.map((it) => (it.id === id ? { ...it, ...partial } : it))
-			);
+			let updated: InventoryItem | null = null;
+			persist((items) => {
+				const next = items.map((it) => {
+					if (it.id !== id) return it;
+					updated = { ...it, ...partial };
+					return updated;
+				});
+				return next;
+			});
+			if (updated) remoteupsert(updated);
 		},
 
 		remove(id: string) {
 			persist((items) => items.filter((it) => it.id !== id));
+			remotedelete(id);
 		},
 
 		duplicate(id: string): string {
 			let newId = '';
+			let copy: InventoryItem | null = null;
 			persist((items) => {
 				const src = items.find((it) => it.id === id);
 				if (!src) return items;
 				newId = createId();
-				const copy = {
+				copy = {
 					...src,
 					id: newId,
 					name: `${src.name} (copy)`,
 					createdAt: Date.now(),
-					// Don't copy generated 3D model URL — it stays with the original item
 					modelUrl: undefined
 				};
-				// Insert the copy right after the original
 				const idx = items.indexOf(src);
 				const next = [...items];
 				next.splice(idx + 1, 0, copy);
 				return next;
 			});
+			if (copy) remoteupsert(copy);
 			return newId;
 		},
 
 		addContent(id: string, content: string) {
+			let updated: InventoryItem | null = null;
 			persist((items) =>
-				items.map((it) =>
-					it.id === id ? { ...it, contents: [...it.contents, content] } : it
-				)
+				items.map((it) => {
+					if (it.id !== id) return it;
+					updated = { ...it, contents: [...it.contents, content] };
+					return updated;
+				})
 			);
+			if (updated) remoteupsert(updated);
 		},
 
 		removeContent(id: string, index: number) {
+			let updated: InventoryItem | null = null;
 			persist((items) =>
-				items.map((it) =>
-					it.id === id
-						? { ...it, contents: it.contents.filter((_, i) => i !== index) }
-						: it
-				)
+				items.map((it) => {
+					if (it.id !== id) return it;
+					updated = { ...it, contents: it.contents.filter((_, i) => i !== index) };
+					return updated;
+				})
 			);
+			if (updated) remoteupsert(updated);
 		},
+
+		// ── Remote-only helpers (called by sync.ts) ────────────────────────────
+
+		/** Merge a remotely-received item into the store without triggering another remote write */
+		upsertFromRemote(item: InventoryItem) {
+			update((items) => {
+				const idx = items.findIndex((it) => it.id === item.id);
+				let next: InventoryItem[];
+				if (idx >= 0) {
+					next = items.map((it) => (it.id === item.id ? item : it));
+				} else {
+					next = [item, ...items];
+				}
+				save(next);
+				return next;
+			});
+		},
+
+		/** Remove a remotely-deleted item without triggering another remote delete */
+		removeFromRemote(id: string) {
+			update((items) => {
+				const next = items.filter((it) => it.id !== id);
+				save(next);
+				return next;
+			});
+		},
+
+		/** Replace entire store (used on initial sync) */
+		setAll(items: InventoryItem[]) {
+			save(items);
+			set(items);
+		},
+
+		/** Update only the photo URL after Storage upload */
+		updatePhotoUrl(id: string, photoUrl: string) {
+			update((items) => {
+				const next = items.map((it) => (it.id === id ? { ...it, photo: photoUrl } : it));
+				save(next);
+				return next;
+			});
+		},
+
+		// ── Import / Export ────────────────────────────────────────────────────
 
 		exportJSON(): string {
 			const items = load();

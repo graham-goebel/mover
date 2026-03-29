@@ -60,6 +60,9 @@ function createMoveDateStore() {
 			else localStorage.removeItem(MOVE_DATE_KEY);
 		}
 		_set(value);
+		import('$lib/stores/sync').then(({ syncSettings }) =>
+			syncSettings({ moveDate: value })
+		).catch(() => {});
 	}
 
 	return { subscribe, set: persist };
@@ -113,6 +116,9 @@ function createMoveRouteStore() {
 			localStorage.setItem(MOVE_ROUTE_KEY, JSON.stringify(value));
 		}
 		_set(value);
+		import('$lib/stores/sync').then(({ syncSettings }) =>
+			syncSettings({ moveRoute: value })
+		).catch(() => {});
 	}
 
 	return {

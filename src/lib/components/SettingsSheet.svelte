@@ -1,8 +1,15 @@
 <script lang="ts">
 	import { theme, moveDate, moveRoute, settingsOpen } from '$lib/stores/app';
+	import { signOut } from '$lib/supabase';
+	import { currentUser } from '$lib/stores/sync';
 
 	function close() {
 		settingsOpen.set(false);
+	}
+
+	async function handleSignOut() {
+		close();
+		await signOut();
 	}
 
 	let dateValue = $state($moveDate ?? '');
@@ -203,6 +210,17 @@
 				<p id="route-miles-hint" class="stack-hint">Driving distance between the two places.</p>
 			</div>
 		</div>
+
+		<!-- Account -->
+		{#if $currentUser}
+		<div class="settings-section">
+			<p class="settings-label">Account</p>
+			<div class="stack-group account-row">
+				<span class="account-email">{$currentUser.email}</span>
+				<button class="signout-btn" onclick={handleSignOut}>Sign out</button>
+			</div>
+		</div>
+		{/if}
 		</div>
 	</div>
 {/if}
@@ -456,5 +474,38 @@
 		font-size: 11px;
 		color: var(--color-text-muted);
 		line-height: 1.35;
+	}
+
+	.account-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 12px 16px;
+		gap: 12px;
+	}
+
+	.account-email {
+		font-size: 13px;
+		color: var(--color-text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.signout-btn {
+		flex-shrink: 0;
+		padding: 6px 14px;
+		font-size: 13px;
+		font-weight: 600;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: transparent;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.signout-btn:hover {
+		background: var(--color-bg-card);
 	}
 </style>
