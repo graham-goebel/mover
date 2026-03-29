@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { browser } from '$app/environment';
+import { base } from '$app/paths';
 import { env } from '$env/dynamic/public';
 import type { InventoryItem } from '$lib/types';
 
@@ -12,6 +13,11 @@ const FALLBACK_SUPABASE_ANON_KEY =
 	'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkdHp2ZXdjYnNxcmphdWFyY2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MDcxOTMsImV4cCI6MjA5MDM4MzE5M30.jI0ZThydv74R4iOZ8asMOX93XKZqNzP42rLItClzg2A';
 
 function resolveUrlAndKey(): { url: string; key: string } {
+	// #region agent log
+	const rawEnv = env.PUBLIC_SUPABASE_URL;
+	const rawKey = env.PUBLIC_SUPABASE_ANON_KEY;
+	fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'supabase.ts:resolveUrlAndKey',message:'env values',data:{rawEnvType:typeof rawEnv,rawEnvLen:rawEnv?.length,rawKeyType:typeof rawKey,rawKeyLen:rawKey?.length,willUseFallbackUrl:!rawEnv,willUseFallbackKey:!rawKey},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+	// #endregion
 	const url = (env.PUBLIC_SUPABASE_URL || FALLBACK_SUPABASE_URL).trim();
 	const key = (env.PUBLIC_SUPABASE_ANON_KEY || FALLBACK_SUPABASE_ANON_KEY).trim();
 	return { url, key };
@@ -22,22 +28,35 @@ let _client: SupabaseClient | null = null;
 function getClient(): SupabaseClient {
 	if (_client) return _client;
 	const { url, key } = resolveUrlAndKey();
+	// #region agent log
+	fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'supabase.ts:getClient',message:'creating client',data:{urlLen:url?.length,keyLen:key?.length,urlStart:url?.substring(0,30)},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+	// #endregion
 	if (!url || !key) {
 		throw new Error('Supabase is not configured (missing URL or anon key)');
 	}
-	_client = createClient(url, key, {
-		auth: {
-			persistSession: true,
-			autoRefreshToken: true,
-			detectSessionInUrl: true
-		}
-	});
+	try {
+		_client = createClient(url, key, {
+			auth: {
+				persistSession: true,
+				autoRefreshToken: true,
+				detectSessionInUrl: true
+			}
+		});
+	} catch (err) {
+		// #region agent log
+		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'supabase.ts:getClient:catch',message:'createClient threw',data:{error:String(err)},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+		// #endregion
+		throw err;
+	}
 	return _client;
 }
 
 /** Lazy proxy so createClient never runs with empty env at module init (Safari / PWA ordering). */
 export const supabase = new Proxy({} as SupabaseClient, {
 	get(_target, prop, receiver) {
+		// #region agent log
+		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'supabase.ts:Proxy.get',message:'property accessed',data:{prop:String(prop)},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+		// #endregion
 		const client = getClient();
 		const value = Reflect.get(client, prop, receiver);
 		return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(client) : value;
@@ -47,11 +66,15 @@ export const supabase = new Proxy({} as SupabaseClient, {
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 export async function signInWithEmail(email: string) {
-	// Use Vite BASE_URL (not $app/paths base) — some minifiers dropped `base` and produced `undefined/` in the bundle.
-	const redirect =
-		browser && typeof window !== 'undefined'
-			? new URL(import.meta.env.BASE_URL, window.location.origin).href
-			: undefined;
+	let redirect: string | undefined;
+	if (browser && typeof window !== 'undefined') {
+		// base is '' in dev and '/mover' in prod — always append trailing slash
+		const path = base || '';
+		redirect = `${window.location.origin}${path}/`;
+	}
+	// #region agent log
+	fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'supabase.ts:signInWithEmail',message:'redirect URL',data:{redirect,base},timestamp:Date.now(),hypothesisId:'H_REDIRECT'})}).catch(()=>{});
+	// #endregion
 	return supabase.auth.signInWithOtp({
 		email,
 		options: { emailRedirectTo: redirect }

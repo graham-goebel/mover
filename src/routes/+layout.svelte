@@ -22,11 +22,23 @@
 	onMount(() => {
 		if (!browser) return;
 
+		// #region agent log
+		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'+layout.svelte:onMount',message:'onMount fired, about to call getSession',data:{},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+		// #endregion
+
 		// Resolve initial session
 		supabase.auth.getSession().then(({ data }) => {
+			// #region agent log
+			fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'+layout.svelte:getSession.then',message:'getSession resolved',data:{hasSession:!!data.session,hasUser:!!data.session?.user},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+			// #endregion
 			const user = data.session?.user ?? null;
 			currentUser.set(user);
 			if (user) syncUserData(user.id);
+			authReady = true;
+		}).catch((err: unknown) => {
+			// #region agent log
+			fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'+layout.svelte:getSession.catch',message:'getSession FAILED',data:{error:String(err)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+			// #endregion
 			authReady = true;
 		});
 

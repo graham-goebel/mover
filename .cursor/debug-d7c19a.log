@@ -1,0 +1,48 @@
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774812732262,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774812732265,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774812732263,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774812732263,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774812732263,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774812732264,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774812732265,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774812732265,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774812732270,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774812732265,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774812732271,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774812732265,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774814764868,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814764870,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774814764868,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814764868,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774814764868,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774814764868,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774814764873,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814764868,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774814764874,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814764869,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774814764869,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774814764869,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774814774400,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774814774405,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814774400,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774814774400,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774814774400,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814774400,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774814774400,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774814774400,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774814774400,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814774401,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814774401,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774814774404,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774814781071,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814781072,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774814781072,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774814781072,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814781073,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:onMount","message":"onMount fired, about to call getSession","data":{},"timestamp":1774814781077,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814781078,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"supabase.ts:resolveUrlAndKey","message":"env values","data":{"rawEnvType":"string","rawEnvLen":40,"rawKeyType":"string","rawKeyLen":208,"willUseFallbackUrl":false,"willUseFallbackKey":false},"timestamp":1774814781078,"hypothesisId":"H2"}
+{"sessionId":"d7c19a","location":"supabase.ts:getClient","message":"creating client","data":{"urlLen":40,"keyLen":208,"urlStart":"https://qdtzvewcbsqrjauarcku.s"},"timestamp":1774814781078,"hypothesisId":"H5"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774814781079,"hypothesisId":"H4"}
+{"sessionId":"d7c19a","location":"supabase.ts:Proxy.get","message":"property accessed","data":{"prop":"auth"},"timestamp":1774814781078,"hypothesisId":"H3"}
+{"sessionId":"d7c19a","location":"+layout.svelte:getSession.then","message":"getSession resolved","data":{"hasSession":false,"hasUser":false},"timestamp":1774814781082,"hypothesisId":"H4"}
