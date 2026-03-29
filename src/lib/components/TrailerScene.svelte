@@ -48,37 +48,18 @@
 		];
 	}
 
-	// ── Drag state (shared with DragController) ─────────────────
 	let dragId = $state<string | null>(null);
-	let dragMoved = $state(false);
 
-	function handleItemClick(id: string) {
-		// #region agent log
-		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:handleItemClick',message:'click on item',data:{id,currentSelectedId:selectedItemId,dragMoved},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
-		// #endregion
-		if (dragMoved) return;
-		onSelectItem(selectedItemId === id ? null : id);
-	}
-
-	function handleItemPointerDown(id: string) {
-		// #region agent log
-		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:handleItemPointerDown',message:'pointerdown on item',data:{id},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
-		// #endregion
+	function handleDragStart(id: string) {
 		dragId = id;
-		dragMoved = false;
 	}
 
 	function handleDragMove(id: string, pos: { x: number; y: number; z: number }) {
-		dragMoved = true;
 		onMoveItem?.(id, pos);
 	}
 
 	function handleDragEnd() {
-		// #region agent log
-		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:handleDragEnd',message:'dragEnd called',data:{dragId,dragMoved},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
-		// #endregion
 		dragId = null;
-		dragMoved = false;
 	}
 
 	const meshCache = new Map<string, THREE.Group>();
@@ -96,12 +77,6 @@
 		}
 		return group;
 	}
-
-	// #region agent log
-	$effect(() => {
-		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:mount',message:'TrailerScene rendered',data:{packedItemsCount:packedItems.length,visibleItemsCount:visibleItems.length,loadStep,selectedItemId},timestamp:Date.now(),hypothesisId:'B3'})}).catch(()=>{});
-	});
-	// #endregion
 
 	const blobUrlCache = new Map<string, string | null>();
 
@@ -121,7 +96,9 @@
 		scale={SCALE}
 		trailerSceneLength={tl}
 		trailerSceneWidth={tw}
-		dragItemId={dragId}
+		{selectedItemId}
+		{onSelectItem}
+		onDragStart={handleDragStart}
 		onDragMove={handleDragMove}
 		onDragEnd={handleDragEnd}
 	/>
@@ -182,24 +159,6 @@
 		outlineColor="#0a0a0a"
 	/>
 
-	<!-- Test cube for E4: does Threlte interactivity work at all? -->
-	<T.Mesh
-		position={[-tl, th * 2, 0]}
-		onclick={() => {
-			// #region agent log
-			fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:testCube:onclick',message:'TEST CUBE clicked! Interactivity works.',data:{},timestamp:Date.now(),hypothesisId:'E4',runId:'diag2'})}).catch(()=>{});
-			// #endregion
-		}}
-		onpointerdown={() => {
-			// #region agent log
-			fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:testCube:onpointerdown',message:'TEST CUBE pointerdown! Interactivity works.',data:{},timestamp:Date.now(),hypothesisId:'E4',runId:'diag2'})}).catch(()=>{});
-			// #endregion
-		}}
-	>
-		<T.BoxGeometry args={[0.3, 0.3, 0.3]} />
-		<T.MeshStandardMaterial color="#ff0000" />
-	</T.Mesh>
-
 	<!-- Packed items -->
 	{#each visibleItems as packed (packed.item.id)}
 		{@const pos = itemPosition(packed)}
@@ -207,34 +166,7 @@
 		{@const isSelected = selectedItemId === packed.item.id}
 		{@const isBeingDragged = dragId === packed.item.id}
 
-		<T.Group
-			position={pos}
-			onclick={() => {
-				// #region agent log
-				fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:group:onclick',message:'onclick fired on GROUP',data:{id:packed.item.id},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
-				// #endregion
-				handleItemClick(packed.item.id);
-			}}
-			onpointerdown={(e: any) => {
-				// #region agent log
-				fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:group:onpointerdown',message:'onpointerdown fired on GROUP',data:{id:packed.item.id},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
-				// #endregion
-				handleItemPointerDown(packed.item.id);
-			}}
-		>
-
-			<!-- E3 test: Threlte-native mesh inside Group, does it fire? -->
-			<T.Mesh
-				onclick={() => {
-					// #region agent log
-					fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:innerMesh:onclick',message:'INNER MESH clicked inside Group',data:{id:packed.item.id},timestamp:Date.now(),hypothesisId:'E3',runId:'diag2'})}).catch(()=>{});
-					// #endregion
-				}}
-			>
-				<T.BoxGeometry args={scl} />
-				<T.MeshBasicMaterial transparent opacity={0} depthWrite={false} />
-			</T.Mesh>
-
+		<T.Group position={pos}>
 			{#if packed.item.modelUrl}
 				{#key packed.item.modelUrl}
 					{#await resolveUrl(packed.item.modelUrl) then blobUrl}
