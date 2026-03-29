@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { theme, moveDate, moveRoute, settingsOpen } from '$lib/stores/app';
-	import { signOut } from '$lib/supabase';
+	import { signOut, updatePassword } from '$lib/supabase';
 	import { currentUser } from '$lib/stores/sync';
+
+	let showPasswordForm = $state(false);
+	let newPassword = $state('');
+	let confirmPassword = $state('');
+	let pwLoading = $state(false);
+	let pwError = $state('');
+	let pwSuccess = $state(false);
 
 	function close() {
 		settingsOpen.set(false);
@@ -10,6 +17,33 @@
 	async function handleSignOut() {
 		close();
 		await signOut();
+	}
+
+	async function handlePasswordUpdate() {
+		pwError = '';
+		pwSuccess = false;
+		if (newPassword.length < 6) {
+			pwError = 'Password must be at least 6 characters';
+			return;
+		}
+		if (newPassword !== confirmPassword) {
+			pwError = 'Passwords do not match';
+			return;
+		}
+		pwLoading = true;
+		const { error } = await updatePassword(newPassword);
+		pwLoading = false;
+		if (error) {
+			pwError = error.message;
+		} else {
+			pwSuccess = true;
+			newPassword = '';
+			confirmPassword = '';
+			setTimeout(() => {
+				showPasswordForm = false;
+				pwSuccess = false;
+			}, 2000);
+		}
 	}
 
 	let dateValue = $state($moveDate ?? '');
@@ -213,11 +247,60 @@
 
 		<!-- Account -->
 		{#if $currentUser}
-		<div class="settings-section">
-			<p class="settings-label">Account</p>
-			<div class="stack-group account-row">
+		<div class="settings-footer">
+			<div class="settings-divider"></div>
+			<div class="settings-section-label">Account</div>
+
+			<div class="account-row">
 				<span class="account-email">{$currentUser.email}</span>
 				<button class="signout-btn" onclick={handleSignOut}>Sign out</button>
+			</div>
+
+			<div class="pw-section">
+				{#if !showPasswordForm}
+					<button class="pw-toggle" onclick={() => { showPasswordForm = true; pwError = ''; pwSuccess = false; }}>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+							<path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+						</svg>
+						Change password
+					</button>
+				{:else}
+					<form class="pw-form" onsubmit={(e) => { e.preventDefault(); handlePasswordUpdate(); }}>
+						<input
+							type="password"
+							class="stack-input"
+							bind:value={newPassword}
+							placeholder="New password"
+							autocomplete="new-password"
+							minlength="6"
+							required
+						/>
+						<input
+							type="password"
+							class="stack-input"
+							bind:value={confirmPassword}
+							placeholder="Confirm password"
+							autocomplete="new-password"
+							minlength="6"
+							required
+						/>
+						{#if pwError}
+							<p class="pw-error">{pwError}</p>
+						{/if}
+						{#if pwSuccess}
+							<p class="pw-success">Password updated</p>
+						{/if}
+						<div class="pw-actions">
+							<button type="button" class="pw-cancel" onclick={() => { showPasswordForm = false; newPassword = ''; confirmPassword = ''; pwError = ''; }}>
+								Cancel
+							</button>
+							<button type="submit" class="pw-save" disabled={pwLoading || !newPassword || !confirmPassword}>
+								{pwLoading ? 'Saving…' : 'Update'}
+							</button>
+						</div>
+					</form>
+				{/if}
 			</div>
 		</div>
 		{/if}
@@ -507,5 +590,89 @@
 
 	.signout-btn:hover {
 		background: var(--color-bg-card);
+	}
+
+	.settings-footer {
+		flex-shrink: 0;
+		padding-bottom: 16px;
+	}
+
+	.pw-section {
+		padding: 0 20px;
+	}
+
+	.pw-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 0;
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		background: none;
+		border: none;
+		cursor: pointer;
+		transition: color 0.15s;
+	}
+
+	.pw-toggle:hover {
+		color: var(--color-text);
+	}
+
+	.pw-form {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding-top: 4px;
+	}
+
+	.pw-error {
+		margin: 0;
+		font-size: 13px;
+		color: var(--color-danger);
+	}
+
+	.pw-success {
+		margin: 0;
+		font-size: 13px;
+		color: var(--color-success, #22c55e);
+		font-weight: 500;
+	}
+
+	.pw-actions {
+		display: flex;
+		gap: 8px;
+		justify-content: flex-end;
+	}
+
+	.pw-cancel,
+	.pw-save {
+		padding: 8px 16px;
+		font-size: 13px;
+		font-weight: 600;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition: background 0.15s, opacity 0.15s;
+	}
+
+	.pw-cancel {
+		background: transparent;
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+	}
+
+	.pw-cancel:hover {
+		background: var(--color-bg-card);
+	}
+
+	.pw-save {
+		background: var(--color-accent);
+		color: var(--color-accent-fg);
+		border: none;
+	}
+
+	.pw-save:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>
