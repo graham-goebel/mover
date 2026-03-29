@@ -4,6 +4,7 @@
 		fragile?: boolean;
 		stackable?: boolean;
 		donate?: boolean;
+		important?: boolean;
 		fieldId?: string;
 	}
 
@@ -12,6 +13,7 @@
 		fragile = $bindable(false),
 		stackable = $bindable(true),
 		donate = $bindable(false),
+		important = $bindable(false),
 		fieldId = 'item-flags'
 	}: Props = $props();
 
@@ -20,6 +22,7 @@
 
 	const summary = $derived.by(() => {
 		const parts: string[] = [];
+		if (important) parts.push('⭐ Important');
 		if (forSale) parts.push('For sale');
 		if (fragile) parts.push('Fragile');
 		parts.push(stackable ? 'Stackable' : 'Not stackable');
@@ -88,6 +91,10 @@
 			role="group"
 			aria-labelledby="{fieldId}-label"
 		>
+			<label class="flags-option">
+				<input type="checkbox" bind:checked={important} />
+				<span>⭐ Important</span>
+			</label>
 			<label class="flags-option">
 				<input type="checkbox" bind:checked={forSale} />
 				<span>For sale</span>

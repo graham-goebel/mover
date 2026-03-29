@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { browser } from '$app/environment';
 import { base } from '$app/paths';
 import { env } from '$env/dynamic/public';
-import type { InventoryItem } from '$lib/types';
+import { normalizeContents, type InventoryItem } from '$lib/types';
 
 /**
  * Production defaults — anon key is public by design; RLS enforces access.
@@ -148,9 +148,10 @@ function rowToItem(row: any): InventoryItem {
 		stackable: row.stackable !== false,
 		forSale: Boolean(row.for_sale),
 		donate: Boolean(row.donate),
+		important: Boolean(row.important),
 		room: row.room ?? undefined,
 		notes: row.notes ?? undefined,
-		contents: row.contents ?? [],
+		contents: normalizeContents(row.contents),
 		modelUrl: row.model_url ?? undefined,
 		createdAt: new Date(row.created_at).getTime()
 	};
@@ -171,6 +172,7 @@ function itemToRow(userId: string, item: InventoryItem) {
 		stackable: item.stackable,
 		for_sale: item.forSale,
 		donate: item.donate,
+		important: item.important,
 		room: item.room ?? null,
 		notes: item.notes ?? null,
 		contents: item.contents,
@@ -206,10 +208,24 @@ export async function deleteItem(itemId: string): Promise<void> {
 
 // ── Settings sync ─────────────────────────────────────────────────────────────
 
+export interface PackPlacement {
+	itemId: string;
+	position: { x: number; y: number; z: number };
+	rotation: { l: number; w: number; h: number };
+	color: string;
+}
+
+export interface RemotePackState {
+	packedItemIds: string[];
+	placements: PackPlacement[];
+	utilization: number;
+}
+
 export interface RemoteSettings {
 	moveDate: string | null;
 	moveRoute: { origin: string; destination: string; miles: number | null } | null;
 	trailer: unknown | null;
+	packState: RemotePackState | null;
 }
 
 export async function fetchSettings(userId: string): Promise<RemoteSettings | null> {
@@ -228,7 +244,8 @@ export async function fetchSettings(userId: string): Promise<RemoteSettings | nu
 	return {
 		moveDate: data.move_date ?? null,
 		moveRoute: data.move_route ?? null,
-		trailer: data.trailer ?? null
+		trailer: data.trailer ?? null,
+		packState: data.pack_state ?? null
 	};
 }
 
@@ -240,6 +257,7 @@ export async function upsertSettings(
 	if ('moveDate' in settings) row.move_date = settings.moveDate ?? null;
 	if ('moveRoute' in settings) row.move_route = settings.moveRoute ?? null;
 	if ('trailer' in settings) row.trailer = settings.trailer ?? null;
+	if ('packState' in settings) row.pack_state = settings.packState ?? null;
 
 	const { error } = await supabase.from('user_settings').upsert(row);
 	if (error) console.warn('[supabase] upsertSettings error:', error.message);

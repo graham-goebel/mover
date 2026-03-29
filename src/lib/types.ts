@@ -21,6 +21,19 @@ export interface Dimensions {
 	h: number; // height in inches
 }
 
+export interface ContentItem {
+	text: string;
+	important: boolean;
+}
+
+/** Normalize legacy plain-string contents to ContentItem[] */
+export function normalizeContents(raw: unknown): ContentItem[] {
+	if (!Array.isArray(raw)) return [];
+	return raw.map((c) =>
+		typeof c === 'string' ? { text: c, important: false } : { text: c.text ?? '', important: Boolean(c.important) }
+	);
+}
+
 export interface InventoryItem {
 	id: string;
 	name: string;
@@ -35,7 +48,8 @@ export interface InventoryItem {
 	/** Marked for donation (e.g. not keeping after move) */
 	donate: boolean;
 	modelUrl?: string; // GLB URL from TripoSR server, if generated
-	contents: string[];
+	important: boolean;
+	contents: ContentItem[];
 	/** `null` or omitted = General (not tied to a room) */
 	room?: string | null;
 	notes?: string;

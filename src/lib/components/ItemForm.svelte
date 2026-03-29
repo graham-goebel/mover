@@ -25,6 +25,7 @@
 	let fragile = $state(false);
 	let stackable = $state(true);
 	let donate = $state(false);
+	let important = $state(false);
 	let weight = $state(0);
 	let notes = $state('');
 	let roomPreset = $state<RoomPresetId>('general');
@@ -57,6 +58,7 @@
 			stackable,
 			forSale,
 			donate,
+			important,
 			room: roomFromPresetAndCustom(roomPreset, roomCustom),
 			contents: [],
 			notes: notes || undefined
@@ -130,6 +132,7 @@
 			bind:fragile
 			bind:stackable
 			bind:donate
+			bind:important
 			fieldId="form-item-flags"
 		/>
 

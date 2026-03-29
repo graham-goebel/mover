@@ -6,6 +6,7 @@
 	import { createItemMesh, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 	import { resolveModelUrl } from '$lib/utils/generate3d';
 	import SceneSetup from './SceneSetup.svelte';
+	import DragController from './DragController.svelte';
 
 	interface Props {
 		trailer: TrailerPreset;
@@ -13,9 +14,10 @@
 		loadStep: number;
 		selectedItemId: string | null;
 		onSelectItem: (id: string | null) => void;
+		onMoveItem?: (id: string, position: { x: number; y: number; z: number }) => void;
 	}
 
-	let { trailer, packedItems, loadStep, selectedItemId, onSelectItem }: Props = $props();
+	let { trailer, packedItems, loadStep, selectedItemId, onSelectItem, onMoveItem }: Props = $props();
 
 	const SCALE = 0.02;
 
@@ -46,8 +48,37 @@
 		];
 	}
 
+	// ── Drag state (shared with DragController) ─────────────────
+	let dragId = $state<string | null>(null);
+	let dragMoved = $state(false);
+
 	function handleItemClick(id: string) {
+		// #region agent log
+		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:handleItemClick',message:'click on item',data:{id,currentSelectedId:selectedItemId,dragMoved},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
+		// #endregion
+		if (dragMoved) return;
 		onSelectItem(selectedItemId === id ? null : id);
+	}
+
+	function handleItemPointerDown(id: string) {
+		// #region agent log
+		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:handleItemPointerDown',message:'pointerdown on item',data:{id},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
+		// #endregion
+		dragId = id;
+		dragMoved = false;
+	}
+
+	function handleDragMove(id: string, pos: { x: number; y: number; z: number }) {
+		dragMoved = true;
+		onMoveItem?.(id, pos);
+	}
+
+	function handleDragEnd() {
+		// #region agent log
+		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:handleDragEnd',message:'dragEnd called',data:{dragId,dragMoved},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
+		// #endregion
+		dragId = null;
+		dragMoved = false;
 	}
 
 	const meshCache = new Map<string, THREE.Group>();
@@ -66,7 +97,12 @@
 		return group;
 	}
 
-	// Resolve idb: model URLs to blob: URLs (async, cached per session)
+	// #region agent log
+	$effect(() => {
+		fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:mount',message:'TrailerScene rendered',data:{packedItemsCount:packedItems.length,visibleItemsCount:visibleItems.length,loadStep,selectedItemId},timestamp:Date.now(),hypothesisId:'B3'})}).catch(()=>{});
+	});
+	// #endregion
+
 	const blobUrlCache = new Map<string, string | null>();
 
 	async function resolveUrl(idbUrl: string): Promise<string | null> {
@@ -79,6 +115,16 @@
 
 <Canvas>
 	<SceneSetup />
+	<DragController
+		{packedItems}
+		{trailer}
+		scale={SCALE}
+		trailerSceneLength={tl}
+		trailerSceneWidth={tw}
+		dragItemId={dragId}
+		onDragMove={handleDragMove}
+		onDragEnd={handleDragEnd}
+	/>
 	<T.PerspectiveCamera
 		makeDefault
 		position={[tl * 1.5, th * 1.5, tw * 2]}
@@ -89,6 +135,7 @@
 			dampingFactor={0.15}
 			target={[0, th / 2, 0]}
 			maxPolarAngle={Math.PI / 2 + 0.1}
+			enabled={!dragId}
 		/>
 	</T.PerspectiveCamera>
 
@@ -110,10 +157,6 @@
 		<T.MeshStandardMaterial color="#111111" transparent opacity={0.8} />
 	</T.Mesh>
 
-	<!--
-		Packing uses length along +X in scene coords; lower packing x fills first (toward hitch).
-		Front = hitch / tow vehicle — load heavier items here to reduce fishtail sway.
-	-->
 	<Text
 		text={'FRONT\nHitch · tow vehicle\n(heavier load here)'}
 		fontSize={endLabelFontSize}
@@ -139,34 +182,71 @@
 		outlineColor="#0a0a0a"
 	/>
 
+	<!-- Test cube for E4: does Threlte interactivity work at all? -->
+	<T.Mesh
+		position={[-tl, th * 2, 0]}
+		onclick={() => {
+			// #region agent log
+			fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:testCube:onclick',message:'TEST CUBE clicked! Interactivity works.',data:{},timestamp:Date.now(),hypothesisId:'E4',runId:'diag2'})}).catch(()=>{});
+			// #endregion
+		}}
+		onpointerdown={() => {
+			// #region agent log
+			fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:testCube:onpointerdown',message:'TEST CUBE pointerdown! Interactivity works.',data:{},timestamp:Date.now(),hypothesisId:'E4',runId:'diag2'})}).catch(()=>{});
+			// #endregion
+		}}
+	>
+		<T.BoxGeometry args={[0.3, 0.3, 0.3]} />
+		<T.MeshStandardMaterial color="#ff0000" />
+	</T.Mesh>
+
 	<!-- Packed items -->
 	{#each visibleItems as packed (packed.item.id)}
 		{@const pos = itemPosition(packed)}
 		{@const scl = itemScale(packed)}
 		{@const isSelected = selectedItemId === packed.item.id}
+		{@const isBeingDragged = dragId === packed.item.id}
 
-		<T.Group position={pos}>
-			<!-- Click target — transparent but raycast-able -->
-			<T.Mesh onclick={() => handleItemClick(packed.item.id)}>
+		<T.Group
+			position={pos}
+			onclick={() => {
+				// #region agent log
+				fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:group:onclick',message:'onclick fired on GROUP',data:{id:packed.item.id},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
+				// #endregion
+				handleItemClick(packed.item.id);
+			}}
+			onpointerdown={(e: any) => {
+				// #region agent log
+				fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:group:onpointerdown',message:'onpointerdown fired on GROUP',data:{id:packed.item.id},timestamp:Date.now(),hypothesisId:'FIX',runId:'post-fix'})}).catch(()=>{});
+				// #endregion
+				handleItemPointerDown(packed.item.id);
+			}}
+		>
+
+			<!-- E3 test: Threlte-native mesh inside Group, does it fire? -->
+			<T.Mesh
+				onclick={() => {
+					// #region agent log
+					fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'TrailerScene.svelte:innerMesh:onclick',message:'INNER MESH clicked inside Group',data:{id:packed.item.id},timestamp:Date.now(),hypothesisId:'E3',runId:'diag2'})}).catch(()=>{});
+					// #endregion
+				}}
+			>
 				<T.BoxGeometry args={scl} />
 				<T.MeshBasicMaterial transparent opacity={0} depthWrite={false} />
 			</T.Mesh>
 
 			{#if packed.item.modelUrl}
-				<!-- GLB from depth generation: scale to fit the bounding box -->
 				{#key packed.item.modelUrl}
 					{#await resolveUrl(packed.item.modelUrl) then blobUrl}
 						{#if blobUrl}
 							<GLTF url={blobUrl} scale={[scl[0], scl[1], scl[2]]} />
 						{:else}
-							<!-- Fallback if blob URL resolution fails -->
 							{@const shapeMesh = getShapeMesh(packed)}
 							<T is={shapeMesh.clone()} />
 						{/if}
 					{/await}
 				{/key}
 			{:else}
-				<!-- Procedural fallback shape -->
 				{@const shapeMesh = getShapeMesh(packed)}
 				<T is={shapeMesh.clone()} />
 			{/if}
@@ -175,7 +255,7 @@
 			<T.LineSegments>
 				<T.EdgesGeometry args={[new THREE.BoxGeometry(...scl)]} />
 				<T.LineBasicMaterial
-					color={isSelected ? '#ffffff' : '#000000'}
+					color={isSelected ? (isBeingDragged ? '#facc15' : '#ffffff') : '#000000'}
 					transparent
 					opacity={isSelected ? 1 : 0.15}
 				/>

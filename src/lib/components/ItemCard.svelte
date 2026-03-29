@@ -74,6 +74,7 @@
 
 		<div class="info">
 			<div class="name-row">
+				{#if item.important}<span class="star">⭐</span>{/if}
 				<span class="name">{item.name}</span>
 				{#if item.forSale}
 					<span class="badge sale">For Sale</span>
@@ -172,7 +173,18 @@
 	.name-row {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
+		overflow-x: auto;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.name-row::-webkit-scrollbar { display: none; }
+
+	.star {
+		flex-shrink: 0;
+		font-size: 13px;
+		line-height: 1;
 	}
 
 	.name {
@@ -192,6 +204,7 @@
 		padding: 2px 6px;
 		border-radius: 4px;
 		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	.badge.fragile {
@@ -218,13 +231,17 @@
 
 	.meta {
 		display: flex;
-		flex-wrap: wrap;
 		gap: 12px;
 		align-items: center;
 		font-size: 12px;
 		color: var(--color-text-muted);
 		line-height: 1.4;
+		overflow-x: auto;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
 	}
+
+	.meta::-webkit-scrollbar { display: none; }
 
 	.room-tag {
 		font-size: 11px;
@@ -237,6 +254,12 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	.vol, .contents-count {
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	.category-icon {

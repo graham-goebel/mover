@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
-import type { TrailerPreset, PackResult } from '$lib/types';
+import type { TrailerPreset, PackResult, PackedItem, InventoryItem } from '$lib/types';
+import type { RemotePackState } from '$lib/supabase';
 
 export const TRAILER_PRESETS: TrailerPreset[] = [
 	{ name: 'Cargo Van', length: 10, width: 5.5, height: 4.5, payloadLbs: 1500 },
@@ -42,26 +43,34 @@ function loadTrailer(): TrailerPreset {
 function createTrailerStore() {
 	const { subscribe, set } = writable<TrailerPreset>(loadTrailer());
 
+	function persist(preset: TrailerPreset) {
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(preset));
+		}
+		set(preset);
+	}
+
 	return {
 		subscribe,
 		select(preset: TrailerPreset) {
-			if (typeof localStorage !== 'undefined') {
-				localStorage.setItem(STORAGE_KEY, JSON.stringify(preset));
-			}
-			set(preset);
+			persist(preset);
 		},
 		setCustom(length: number, width: number, height: number) {
-			const custom: TrailerPreset = {
+			persist({
 				name: 'Custom',
 				length,
 				width,
 				height,
 				payloadLbs: DEFAULT_CUSTOM_PAYLOAD
-			};
+			});
+		},
+		/** Apply trailer from Supabase — writes to localStorage but does NOT trigger a sync back. */
+		setFromRemote(preset: TrailerPreset) {
+			const migrated = migrateTrailer(preset);
 			if (typeof localStorage !== 'undefined') {
-				localStorage.setItem(STORAGE_KEY, JSON.stringify(custom));
+				localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
 			}
-			set(custom);
+			set(migrated);
 		}
 	};
 }
@@ -96,7 +105,45 @@ function createPackResultStore() {
 
 	return {
 		subscribe,
-		set: persist
+		set: persist,
+		/** Restore pack result from remote state + current inventory. */
+		setFromRemote(remote: RemotePackState, allItems: InventoryItem[]) {
+			const itemMap = new Map(allItems.map(i => [i.id, i]));
+			const placed: PackedItem[] = [];
+			const unplacedIds = new Set(remote.packedItemIds);
+
+			for (const p of remote.placements) {
+				const item = itemMap.get(p.itemId);
+				if (!item) continue;
+				placed.push({ item, position: p.position, rotation: p.rotation, color: p.color });
+				unplacedIds.delete(p.itemId);
+			}
+
+			const unplaced: InventoryItem[] = [];
+			for (const id of unplacedIds) {
+				const item = itemMap.get(id);
+				if (item) unplaced.push(item);
+			}
+
+			persist({ placed, unplaced, utilization: remote.utilization });
+		}
+	};
+}
+
+/** Convert a PackResult to the lean remote format for Supabase. */
+export function packResultToRemote(result: PackResult): RemotePackState {
+	return {
+		packedItemIds: [
+			...result.placed.map(p => p.item.id),
+			...result.unplaced.map(u => u.id)
+		],
+		placements: result.placed.map(p => ({
+			itemId: p.item.id,
+			position: p.position,
+			rotation: p.rotation,
+			color: p.color
+		})),
+		utilization: result.utilization
 	};
 }
 

@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import type { InventoryItem } from '$lib/types';
+import { normalizeContents, type InventoryItem } from '$lib/types';
 import { createId } from '$lib/utils/id';
 
 const STORAGE_KEY = 'mover_inventory';
@@ -11,7 +11,9 @@ function migrateItem(it: InventoryItem): InventoryItem {
 		donate: Boolean(it.donate),
 		forSale: Boolean(it.forSale),
 		fragile: Boolean(it.fragile),
-		stackable: it.stackable !== false
+		stackable: it.stackable !== false,
+		important: Boolean(it.important),
+		contents: normalizeContents(it.contents)
 	};
 }
 
@@ -109,12 +111,12 @@ function createInventoryStore() {
 			return newId;
 		},
 
-		addContent(id: string, content: string) {
+		addContent(id: string, text: string) {
 			let updated: InventoryItem | null = null;
 			persist((items) =>
 				items.map((it) => {
 					if (it.id !== id) return it;
-					updated = { ...it, contents: [...it.contents, content] };
+					updated = { ...it, contents: [...it.contents, { text, important: false }] };
 					return updated;
 				})
 			);
@@ -127,6 +129,21 @@ function createInventoryStore() {
 				items.map((it) => {
 					if (it.id !== id) return it;
 					updated = { ...it, contents: it.contents.filter((_, i) => i !== index) };
+					return updated;
+				})
+			);
+			if (updated) remoteupsert(updated);
+		},
+
+		toggleContentImportant(id: string, index: number) {
+			let updated: InventoryItem | null = null;
+			persist((items) =>
+				items.map((it) => {
+					if (it.id !== id) return it;
+					const next = it.contents.map((c, i) =>
+						i === index ? { ...c, important: !c.important } : c
+					);
+					updated = { ...it, contents: next };
 					return updated;
 				})
 			);

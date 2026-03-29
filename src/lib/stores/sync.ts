@@ -11,9 +11,13 @@
 import { writable } from 'svelte/store';
 import type { User } from '@supabase/supabase-js';
 import { supabase, fetchInventory, upsertItem, deleteItem, fetchSettings, upsertSettings, uploadPhoto } from '$lib/supabase';
+import type { RemotePackState } from '$lib/supabase';
+import { normalizeContents } from '$lib/types';
 import { inventory } from '$lib/stores/inventory';
 import { moveDate, moveRoute } from '$lib/stores/app';
-import type { InventoryItem } from '$lib/types';
+import { trailer, packResult, packResultToRemote } from '$lib/stores/trailer';
+import type { PackResult } from '$lib/types';
+import type { InventoryItem, TrailerPreset } from '$lib/types';
 
 export const currentUser = writable<User | null>(null);
 
@@ -41,12 +45,34 @@ export async function syncUserData(userId: string) {
 		}
 	}
 
-	// 2. Pull remote settings
+	// 2. Pull remote settings (including trailer + pack state)
 	const settings = await fetchSettings(userId);
 	if (settings) {
 		if (settings.moveDate) moveDate.set(settings.moveDate);
 		if (settings.moveRoute) moveRoute.set(settings.moveRoute);
-		// trailer sync handled separately if needed
+
+		if (settings.trailer) {
+			trailer.setFromRemote(settings.trailer as TrailerPreset);
+		} else {
+			let localTrailer: TrailerPreset | null = null;
+			const unsub = trailer.subscribe((v) => (localTrailer = v));
+			unsub();
+			if (localTrailer) await upsertSettings(userId, { trailer: localTrailer });
+		}
+
+		if (settings.packState) {
+			let currentItems: InventoryItem[] = [];
+			const unsub = inventory.subscribe((v) => (currentItems = v));
+			unsub();
+			packResult.setFromRemote(settings.packState, currentItems);
+		} else {
+			let localPack: PackResult | null = null;
+			const unsub = packResult.subscribe((v) => (localPack = v));
+			unsub();
+			if (localPack) {
+				await upsertSettings(userId, { packState: packResultToRemote(localPack) });
+			}
+		}
 	}
 
 	// 3. Subscribe to real-time changes
@@ -84,9 +110,10 @@ function startRealtime(userId: string) {
 						stackable: row.stackable !== false,
 						forSale: Boolean(row.for_sale),
 						donate: Boolean(row.donate),
+						important: Boolean(row.important),
 						room: row.room ?? undefined,
 						notes: row.notes ?? undefined,
-						contents: row.contents ?? [],
+						contents: normalizeContents(row.contents),
 						modelUrl: row.model_url ?? undefined,
 						createdAt: new Date(row.created_at).getTime()
 					};
@@ -135,6 +162,18 @@ export async function syncSettings(partial: { moveDate?: string | null; moveRout
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		trailer: partial.trailer as any
 	});
+}
+
+export async function syncTrailer(preset: TrailerPreset) {
+	const user = await getUser();
+	if (!user) return;
+	await upsertSettings(user.id, { trailer: preset });
+}
+
+export async function syncPackState(state: RemotePackState | null) {
+	const user = await getUser();
+	if (!user) return;
+	await upsertSettings(user.id, { packState: state });
 }
 
 async function getUser() {

@@ -1,17 +1,19 @@
 <script lang="ts">
 	import { inventory } from '$lib/stores/inventory';
+	import type { ContentItem } from '$lib/types';
 
 	interface Props {
 		/** When set and not in draft mode, lines are saved to the inventory store. */
 		itemId?: string;
-		contents: string[];
+		contents: ContentItem[];
 		/** New item flow: keep lines in parent until the item is created. */
 		draft?: boolean;
 		onDraftAdd?: (text: string) => void;
 		onDraftRemove?: (index: number) => void;
+		onDraftToggleImportant?: (index: number) => void;
 	}
 
-	let { itemId, contents, draft = false, onDraftAdd, onDraftRemove }: Props = $props();
+	let { itemId, contents, draft = false, onDraftAdd, onDraftRemove, onDraftToggleImportant }: Props = $props();
 	let newContent = $state('');
 
 	function add() {
@@ -33,6 +35,14 @@
 		}
 	}
 
+	function toggleImportant(index: number) {
+		if (draft) {
+			onDraftToggleImportant?.(index);
+		} else if (itemId) {
+			inventory.toggleContentImportant(itemId, index);
+		}
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter') {
 			e.preventDefault();
@@ -49,9 +59,12 @@
 
 	{#if contents.length > 0}
 		<ul class="contents-list">
-			{#each contents as item, i}
-				<li class="content-item">
-					<span>{item}</span>
+			{#each contents as c, i}
+				<li class="content-item" class:content-important={c.important}>
+					<button class="star-btn" onclick={() => toggleImportant(i)} aria-label={c.important ? 'Unmark important' : 'Mark important'}>
+						{c.important ? '⭐' : '☆'}
+					</button>
+					<span class="content-text">{c.text}</span>
 					<button class="remove-btn" onclick={() => remove(i)} aria-label="Remove">
 						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 					</button>
@@ -101,14 +114,45 @@
 	.content-item {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: 8px;
 		padding: 8px 12px;
 		background: var(--color-bg);
 		border-radius: var(--radius-sm);
 		font-size: 14px;
+		transition: background 0.15s;
+	}
+
+	.content-important {
+		background: rgba(250, 204, 21, 0.06);
+	}
+
+	.content-text {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.star-btn {
+		flex-shrink: 0;
+		padding: 2px;
+		font-size: 14px;
+		line-height: 1;
+		background: none;
+		border: none;
+		cursor: pointer;
+		opacity: 0.5;
+		transition: opacity 0.15s;
+	}
+
+	.content-important .star-btn {
+		opacity: 1;
+	}
+
+	.star-btn:hover {
+		opacity: 1;
 	}
 
 	.remove-btn {
+		flex-shrink: 0;
 		color: var(--color-text-muted);
 		padding: 4px;
 		border-radius: 4px;

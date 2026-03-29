@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { PackedItem, TrailerPreset, PackResult, InventoryItem } from '$lib/types';
-	import { trailer, packResult, loadOrderStep, TRAILER_PRESETS } from '$lib/stores/trailer';
+	import { trailer, packResult, loadOrderStep, TRAILER_PRESETS, packResultToRemote } from '$lib/stores/trailer';
 	import { inventory } from '$lib/stores/inventory';
 	import { packItems } from '$lib/utils/packing';
 	import { SHAPE_OPTIONS } from '$lib/utils/shapes';
+	import { syncTrailer, syncPackState } from '$lib/stores/sync';
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
 	import BottomSheet from '$lib/components/BottomSheet.svelte';
 
@@ -25,12 +26,15 @@
 
 	function selectPreset(preset: TrailerPreset) {
 		trailer.select(preset);
+		syncTrailer(preset);
 		showCustomTrailer = false;
 		trailerDropdownOpen = false;
 	}
 
 	function applyCustomTrailer() {
+		const custom: TrailerPreset = { name: 'Custom', length: customLength, width: customWidth, height: customHeight, payloadLbs: 2500 };
 		trailer.setCustom(customLength, customWidth, customHeight);
+		syncTrailer(custom);
 		showCustomTrailer = false;
 		trailerDropdownOpen = false;
 	}
@@ -55,6 +59,15 @@
 		}
 	});
 	inventory.subscribe((v) => items = v.filter(i => !i.forSale));
+
+	let packSyncTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		const snap = result;
+		if (packSyncTimer) clearTimeout(packSyncTimer);
+		packSyncTimer = setTimeout(() => {
+			syncPackState(snap ? packResultToRemote(snap) : null);
+		}, 1000);
+	});
 
 	function repack() {
 		const toPack = items.filter(i => packedIds.has(i.id));
@@ -195,6 +208,17 @@
 	});
 	function fmtCuFt(n: number): string {
 		return n >= 10 ? `${Math.round(n)}` : `${Math.round(n * 10) / 10}`;
+	}
+
+	function moveItem(id: string, position: { x: number; y: number; z: number }) {
+		if (!result) return;
+		const updated: PackResult = {
+			...result,
+			placed: result.placed.map(p =>
+				p.item.id === id ? { ...p, position } : p
+			)
+		};
+		packResult.set(updated);
 	}
 
 	const NUDGE_SMALL = 1;   // inches
@@ -409,8 +433,8 @@
 						<div class="detail-section">
 							<span class="detail-section-label">Contents ({item.contents.length})</span>
 							<ul class="contents-list">
-								{#each item.contents as content}
-									<li>{content}</li>
+								{#each item.contents as c}
+									<li>{#if c.important}⭐ {/if}{c.text}</li>
 								{/each}
 							</ul>
 						</div>
@@ -426,7 +450,7 @@
 			{/if}
 
 			{#if items.length > 0}
-				<details class="accordion" open={accordionState.isOpen('pack-inventory')} ontoggle={(e) => accordionState.toggle('pack-inventory', e.currentTarget.open)}>
+				<details class="accordion" open>
 					<summary class="accordion-trigger">
 						<span class="section-label">Inventory ({items.length})</span>
 						<span class="accordion-hint">{packedIds.size} in trailer</span>
@@ -556,6 +580,7 @@
 				loadStep={0}
 				{selectedItemId}
 				onSelectItem={(id) => selectedItemId = id}
+				onMoveItem={moveItem}
 			/>
 		</div>
 
@@ -621,8 +646,8 @@
 						<div class="detail-section">
 							<span class="detail-section-label">Contents ({item.contents.length})</span>
 							<ul class="contents-list">
-								{#each item.contents as content}
-									<li>{content}</li>
+								{#each item.contents as c}
+									<li>{#if c.important}⭐ {/if}{c.text}</li>
 								{/each}
 							</ul>
 						</div>
@@ -710,6 +735,37 @@
 		font-weight: 700;
 	}
 
+	.packer-tabs {
+		display: flex;
+		gap: 4px;
+		padding: 0 16px 8px;
+		flex-shrink: 0;
+	}
+
+	.packer-tab {
+		flex: 1;
+		padding: 8px 0;
+		font-size: 13px;
+		font-weight: 600;
+		text-align: center;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: background 0.15s, color 0.15s;
+		position: relative;
+	}
+
+	.packer-tab.active {
+		background: var(--color-bg-elevated);
+		color: var(--color-text-primary);
+	}
+
+	.packer-tab:not(.active):hover {
+		color: var(--color-text-secondary);
+	}
+
 	.right-panel {
 		position: relative;
 		flex: 1;
@@ -725,21 +781,302 @@
 		background: #0a0a0a;
 	}
 
-	.toggle-panel {
-		display: none; /* hidden on mobile — controls are always in the sheet */
-		align-items: center;
-		justify-content: center;
-		gap: 6px;
-		padding: 10px;
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--color-text-secondary);
-		background: var(--color-bg-card);
-		border-top: 1px solid var(--color-divider);
+
+	/* ---- Stats panel ---- */
+	.stats-panel {
+		padding: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
 	}
 
-	.controls-panel {
-		background: var(--color-bg);
+	.stats-empty {
+		padding: 32px 16px;
+		text-align: center;
+		color: var(--color-text-muted);
+		font-size: 13px;
+	}
+
+	.pack-stats {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 10px;
+	}
+
+	.pack-stat {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		padding: 14px 8px;
+		background: var(--color-bg-card);
+		border-radius: var(--radius-md);
+	}
+
+	.pack-stat-val {
+		font-size: 28px;
+		font-weight: 700;
+		line-height: 1;
+	}
+
+	.pack-stat-val.warn {
+		color: var(--color-warning);
+	}
+
+	.pack-stat-label {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	.pack-bars {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.cap-bar-block {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.cap-bar-header {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.cap-bar-title {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.cap-bar-meta {
+		font-size: 13px;
+		color: var(--color-text-muted);
+		line-height: 1.35;
+	}
+
+	.cap-bar-meta strong {
+		color: var(--color-text-primary);
+		font-weight: 600;
+	}
+
+	.cap-bar-meta .over {
+		color: var(--color-danger);
+	}
+
+	.cap-bar-track {
+		height: 8px;
+		border-radius: 100px;
+		background: rgba(255, 255, 255, 0.06);
+		overflow: hidden;
+	}
+
+	.cap-bar-track.over-cap {
+		box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.45);
+	}
+
+	.cap-bar-fill {
+		height: 100%;
+		border-radius: 100px;
+		transition: width 0.25s ease;
+	}
+
+	.cap-bar-fill.vol {
+		background: linear-gradient(90deg, #9a9a9a, #f0f0f0);
+	}
+
+	.cap-bar-fill.weight {
+		background: linear-gradient(90deg, #22c55e, #4ade80);
+	}
+
+	.cap-bar-track.over-cap .cap-bar-fill.weight {
+		background: linear-gradient(90deg, var(--color-danger), #f87171);
+	}
+
+	.cap-bar-hint {
+		font-size: 11px;
+		color: var(--color-text-muted);
+		margin: 0;
+		line-height: 1.35;
+	}
+
+	.unplaced-list {
+		padding: 12px;
+		background: var(--color-warning-soft);
+		border-radius: var(--radius-sm);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	.unplaced-title {
+		width: 100%;
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--color-warning);
+		margin-bottom: 4px;
+	}
+
+	.unplaced-item {
+		font-size: 12px;
+		padding: 3px 8px;
+		background: rgba(245, 158, 11, 0.2);
+		border-radius: 4px;
+		color: var(--color-warning);
+	}
+
+	/* ---- Floating trailer dropdown ---- */
+	.trailer-float {
+		position: absolute;
+		top: 12px;
+		right: 12px;
+		z-index: 15;
+	}
+
+	.trailer-float-btn {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 14px;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--color-text-primary);
+		background: rgba(28, 28, 33, 0.88);
+		border: none;
+		border-radius: var(--radius-pill);
+		box-shadow:
+			0 0 0 1px var(--color-border-subtle),
+			0 4px 16px rgba(0, 0, 0, 0.35);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.trailer-float-btn:hover {
+		background: rgba(38, 38, 43, 0.92);
+	}
+
+	.trailer-float-chevron {
+		color: var(--color-text-muted);
+		transition: transform 0.2s;
+		flex-shrink: 0;
+	}
+
+	.trailer-float-chevron.open {
+		transform: rotate(180deg);
+	}
+
+	.trailer-float-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 14;
+		background: transparent;
+		border: none;
+		cursor: default;
+	}
+
+	.trailer-dropdown {
+		position: absolute;
+		top: calc(100% + 6px);
+		right: 0;
+		min-width: 220px;
+		z-index: 16;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 6px;
+		background: rgba(28, 28, 33, 0.94);
+		border: none;
+		border-radius: var(--radius-lg);
+		box-shadow:
+			0 0 0 1px var(--color-border-subtle),
+			0 12px 40px rgba(0, 0, 0, 0.5);
+		backdrop-filter: blur(20px);
+		-webkit-backdrop-filter: blur(20px);
+	}
+
+	.trailer-option {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 12px;
+		padding: 10px 12px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--color-text-primary);
+		font-size: 13px;
+		text-align: left;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.trailer-option:hover {
+		background: rgba(255, 255, 255, 0.06);
+	}
+
+	.trailer-option.active {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.trailer-option-name {
+		font-weight: 600;
+	}
+
+	.trailer-option-dims {
+		font-size: 11px;
+		color: var(--color-text-muted);
+	}
+
+	.trailer-custom-row {
+		display: flex;
+		gap: 6px;
+		align-items: flex-end;
+		padding: 8px 12px 6px;
+	}
+
+	.trailer-custom-field {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.trailer-custom-field span {
+		font-size: 10px;
+		font-weight: 600;
+		color: var(--color-text-muted);
+	}
+
+	.trailer-custom-field input {
+		text-align: center;
+		padding: 6px 4px;
+		font-size: 13px;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-sm);
+		color: var(--color-text-primary);
+	}
+
+	.trailer-custom-apply {
+		padding: 6px 12px;
+		background: var(--color-accent);
+		color: var(--color-accent-fg);
+		font-size: 12px;
+		font-weight: 600;
+		border: none;
+		border-radius: var(--radius-sm);
+		white-space: nowrap;
+		cursor: pointer;
 	}
 
 	/* Selected item detail card */
@@ -1180,14 +1517,6 @@
 		.right-panel {
 			flex: 1;
 			min-width: 0;
-		}
-
-		.toggle-panel {
-			display: none;
-		}
-
-		.controls-panel {
-			border-top: 1px solid var(--color-divider);
 		}
 	}
 </style>

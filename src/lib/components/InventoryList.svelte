@@ -45,6 +45,7 @@
 	let stackable = $state(true);
 	let forSale = $state(false);
 	let donate = $state(false);
+	let important = $state(false);
 	let notes = $state('');
 	let roomPreset = $state<RoomPresetId>('general');
 	let roomCustom = $state('');
@@ -76,7 +77,7 @@
 	let modelUrl = $state<string | null>(null);
 
 	/** Lines for new box/bin items before the item exists in the store */
-	let draftContents = $state<string[]>([]);
+	let draftContents = $state<import('$lib/types').ContentItem[]>([]);
 
 	inventory.subscribe((v) => items = v);
 
@@ -160,6 +161,7 @@
 		stackable = true;
 		forSale = false;
 		donate = false;
+		important = false;
 		roomPreset = 'general';
 		roomCustom = '';
 		notes = '';
@@ -171,11 +173,17 @@
 	}
 
 	function draftContentAdd(text: string) {
-		draftContents = [...draftContents, text];
+		draftContents = [...draftContents, { text, important: false }];
 	}
 
 	function draftContentRemove(index: number) {
 		draftContents = draftContents.filter((_, i) => i !== index);
+	}
+
+	function draftContentToggleImportant(index: number) {
+		draftContents = draftContents.map((c, i) =>
+			i === index ? { ...c, important: !c.important } : c
+		);
 	}
 
 	function switchToHome() {
@@ -213,6 +221,7 @@
 		stackable = item.stackable;
 		forSale = item.forSale ?? false;
 		donate = item.donate ?? false;
+		important = item.important ?? false;
 		const r = splitStoredRoom(item.room);
 		roomPreset = r.preset;
 		roomCustom = r.custom;
@@ -240,6 +249,7 @@
 			stackable,
 			forSale,
 			donate,
+			important,
 			room: roomFromPresetAndCustom(roomPreset, roomCustom),
 			modelUrl: modelUrl || undefined,
 			contents:
@@ -262,6 +272,7 @@
 			stackable,
 			forSale,
 			donate,
+			important,
 			room: roomFromPresetAndCustom(roomPreset, roomCustom),
 			modelUrl: modelUrl || undefined,
 			notes: notes || undefined
@@ -535,6 +546,11 @@
 					</div>
 
 					<div class="view-badges">
+						{#if item.important}
+							<button class="badge badge-important" onclick={() => inventory.update(item.id, { important: false })} title="Unmark important">⭐ Important</button>
+						{:else}
+							<button class="badge badge-mark-important" onclick={() => inventory.update(item.id, { important: true })} title="Mark as important">☆ Mark important</button>
+						{/if}
 						{#if item.forSale}
 							<span class="badge badge-sale">💲 For Sale</span>
 						{/if}
@@ -556,7 +572,7 @@
 							<span class="view-section-label">Contents ({item.contents.length})</span>
 							<ul class="view-contents">
 								{#each item.contents as c}
-									<li>{c}</li>
+									<li class:content-important-li={c.important}>{#if c.important}⭐ {/if}{c.text}</li>
 								{/each}
 							</ul>
 						</div>
@@ -747,6 +763,7 @@
 						bind:fragile
 						bind:stackable
 						bind:donate
+						bind:important
 						fieldId="sidebar-item-flags"
 					/>
 
@@ -756,6 +773,7 @@
 							contents={draftContents}
 							onDraftAdd={draftContentAdd}
 							onDraftRemove={draftContentRemove}
+							onDraftToggleImportant={draftContentToggleImportant}
 						/>
 					{/if}
 
@@ -1019,14 +1037,21 @@
 	.view-badges {
 		display: flex;
 		gap: 10px;
-		flex-wrap: wrap;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		padding-bottom: 2px;
 	}
+
+	.view-badges::-webkit-scrollbar { display: none; }
 
 	.badge {
 		font-size: 12px;
 		font-weight: 600;
 		padding: 4px 10px;
 		border-radius: 100px;
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	.badge-warn {
@@ -1047,6 +1072,28 @@
 	.badge-donate {
 		background: rgba(255, 255, 255, 0.06);
 		color: #a3a3a3;
+	}
+
+	.badge-important {
+		background: rgba(250, 204, 21, 0.15);
+		color: #eab308;
+		cursor: pointer;
+		border: none;
+		font: inherit;
+	}
+
+	.badge-mark-important {
+		background: rgba(255, 255, 255, 0.04);
+		color: var(--color-text-muted);
+		cursor: pointer;
+		border: none;
+		font: inherit;
+		opacity: 0.6;
+		transition: opacity 0.15s;
+	}
+
+	.badge-mark-important:hover {
+		opacity: 1;
 	}
 
 	.view-section {
@@ -1077,6 +1124,11 @@
 		padding: 6px 10px;
 		background: var(--color-bg-card);
 		border-radius: var(--radius-sm);
+	}
+
+	.view-contents li.content-important-li {
+		background: rgba(250, 204, 21, 0.06);
+		font-weight: 500;
 	}
 
 	.view-notes {
@@ -1356,16 +1408,21 @@
 
 	.box-presets {
 		display: flex;
-		flex-wrap: wrap;
 		gap: 6px;
 		margin-top: 8px;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		padding-bottom: 2px;
 	}
+
+	.box-presets::-webkit-scrollbar { display: none; }
 
 	.box-preset-btn {
 		font-size: 10px;
 		font-weight: 500;
 		line-height: 1.3;
-		white-space: pre-line;
+		white-space: nowrap;
 		text-align: center;
 		padding: 6px 10px;
 		border: none;
@@ -1373,6 +1430,7 @@
 		color: var(--color-text-secondary);
 		background: var(--color-bg-card);
 		transition: all 0.15s;
+		flex-shrink: 0;
 	}
 
 	.box-preset-btn.active,
