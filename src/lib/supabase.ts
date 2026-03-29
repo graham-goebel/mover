@@ -68,17 +68,21 @@ export const supabase = new Proxy({} as SupabaseClient, {
 export async function signInWithEmail(email: string) {
 	let redirect: string | undefined;
 	if (browser && typeof window !== 'undefined') {
-		// base is '' in dev and '/mover' in prod — always append trailing slash
 		const path = base || '';
 		redirect = `${window.location.origin}${path}/`;
 	}
-	// #region agent log
-	fetch('http://127.0.0.1:7843/ingest/b4c5b2e9-c26b-4911-bef1-be346f3fecc8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d7c19a'},body:JSON.stringify({sessionId:'d7c19a',location:'supabase.ts:signInWithEmail',message:'redirect URL',data:{redirect,base},timestamp:Date.now(),hypothesisId:'H_REDIRECT'})}).catch(()=>{});
-	// #endregion
 	return supabase.auth.signInWithOtp({
 		email,
 		options: { emailRedirectTo: redirect }
 	});
+}
+
+export async function signUpWithPassword(email: string, password: string) {
+	return supabase.auth.signUp({ email, password });
+}
+
+export async function signInWithPassword(email: string, password: string) {
+	return supabase.auth.signInWithPassword({ email, password });
 }
 
 export async function signOut() {
