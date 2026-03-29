@@ -34,7 +34,19 @@ export default defineConfig({
 			globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 			// Force the new service worker to activate immediately instead of waiting for tabs to close
 			skipWaiting: true,
-			clientsClaim: true
+			clientsClaim: true,
+			// Always fetch fresh env (PUBLIC_*); stale precache caused empty Supabase URL on some clients
+			runtimeCaching: [
+				{
+					urlPattern: ({ url }) => url.pathname.endsWith('/_app/env.js'),
+					handler: 'NetworkFirst',
+					options: {
+						cacheName: 'mover-sveltekit-env',
+						networkTimeoutSeconds: 5,
+						expiration: { maxEntries: 2, maxAgeSeconds: 300 }
+					}
+				}
+			]
 		}
 		})
 	],

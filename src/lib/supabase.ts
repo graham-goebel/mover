@@ -1,24 +1,60 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { browser } from '$app/environment';
+import { env } from '$env/dynamic/public';
 import type { InventoryItem } from '$lib/types';
 
-const SUPABASE_URL = import.meta.env.PUBLIC_SUPABASE_URL as string;
-const SUPABASE_ANON_KEY = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
+/**
+ * Production defaults — anon key is public by design; RLS enforces access.
+ * Used when `$env/dynamic/public` is empty (chunk loads before env.js, stale SW, etc.).
+ */
+const FALLBACK_SUPABASE_URL = 'https://qdtzvewcbsqrjauarcku.supabase.co';
+const FALLBACK_SUPABASE_ANON_KEY =
+	'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkdHp2ZXdjYnNxcmphdWFyY2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MDcxOTMsImV4cCI6MjA5MDM4MzE5M30.jI0ZThydv74R4iOZ8asMOX93XKZqNzP42rLItClzg2A';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-	auth: {
-		persistSession: true,
-		autoRefreshToken: true,
-		detectSessionInUrl: true
+function resolveUrlAndKey(): { url: string; key: string } {
+	const url = (env.PUBLIC_SUPABASE_URL || FALLBACK_SUPABASE_URL).trim();
+	const key = (env.PUBLIC_SUPABASE_ANON_KEY || FALLBACK_SUPABASE_ANON_KEY).trim();
+	return { url, key };
+}
+
+let _client: SupabaseClient | null = null;
+
+function getClient(): SupabaseClient {
+	if (_client) return _client;
+	const { url, key } = resolveUrlAndKey();
+	if (!url || !key) {
+		throw new Error('Supabase is not configured (missing URL or anon key)');
+	}
+	_client = createClient(url, key, {
+		auth: {
+			persistSession: true,
+			autoRefreshToken: true,
+			detectSessionInUrl: true
+		}
+	});
+	return _client;
+}
+
+/** Lazy proxy so createClient never runs with empty env at module init (Safari / PWA ordering). */
+export const supabase = new Proxy({} as SupabaseClient, {
+	get(_target, prop, receiver) {
+		const client = getClient();
+		const value = Reflect.get(client, prop, receiver);
+		return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(client) : value;
 	}
 });
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 export async function signInWithEmail(email: string) {
+	// Use Vite BASE_URL (not $app/paths base) — some minifiers dropped `base` and produced `undefined/` in the bundle.
+	const redirect =
+		browser && typeof window !== 'undefined'
+			? new URL(import.meta.env.BASE_URL, window.location.origin).href
+			: undefined;
 	return supabase.auth.signInWithOtp({
 		email,
-		options: { emailRedirectTo: browser ? window.location.origin : undefined }
+		options: { emailRedirectTo: redirect }
 	});
 }
 
@@ -42,7 +78,6 @@ export async function uploadPhoto(
 	dataUrl: string
 ): Promise<string | null> {
 	try {
-		// Convert data URL to Blob
 		const res = await fetch(dataUrl);
 		const blob = await res.blob();
 		const ext = blob.type === 'image/png' ? 'png' : 'jpg';
@@ -127,18 +162,13 @@ export async function fetchInventory(userId: string): Promise<InventoryItem[]> {
 }
 
 export async function upsertItem(userId: string, item: InventoryItem): Promise<void> {
-	const { error } = await supabase
-		.from('inventory_items')
-		.upsert(itemToRow(userId, item));
+	const { error } = await supabase.from('inventory_items').upsert(itemToRow(userId, item));
 
 	if (error) console.warn('[supabase] upsertItem error:', error.message);
 }
 
 export async function deleteItem(itemId: string): Promise<void> {
-	const { error } = await supabase
-		.from('inventory_items')
-		.delete()
-		.eq('id', itemId);
+	const { error } = await supabase.from('inventory_items').delete().eq('id', itemId);
 
 	if (error) console.warn('[supabase] deleteItem error:', error.message);
 }
