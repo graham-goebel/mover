@@ -8,7 +8,6 @@
 	import ItemCard from './ItemCard.svelte';
 	import ContentsEditor from './ContentsEditor.svelte';
 	import CameraCapture from './CameraCapture.svelte';
-	import MeasurementCanvas from './MeasurementCanvas.svelte';
 	import BottomSheet from './BottomSheet.svelte';
 	import { fileToDataUrl, compressPhoto } from '$lib/utils/photo';
 	import type { RoomPresetId } from '$lib/utils/rooms';
@@ -66,9 +65,6 @@
 			switchToHome();
 		}
 	});
-
-	let photoStep = $state<'capture' | 'measure'>('capture');
-	let rawPhoto = $state<string | null>(null);
 
 	let replacePhotoInput = $state<HTMLInputElement | null>(null);
 	let replacePhotoLoading = $state(false);
@@ -290,8 +286,6 @@
 
 	function openPhotoCapture() {
 		sidebarMode = 'photo';
-		photoStep = 'capture';
-		rawPhoto = null;
 	}
 
 	function triggerReplacePhoto() {
@@ -366,19 +360,12 @@
 	}
 
 	function handleCapture(dataUrl: string) {
-		rawPhoto = dataUrl;
-		photoStep = 'measure';
-	}
-
-	function handleMeasureComplete(dims: Dimensions, photo: string) {
-		photoUrl = photo;
-		l = dims.l; w = dims.w; h = dims.h;
+		photoUrl = dataUrl;
 		sidebarMode = editingId ? 'edit' : 'add';
 	}
 
 	function cancelPhoto() {
 		sidebarMode = editingId ? 'edit' : 'add';
-		rawPhoto = null;
 	}
 
 	function shapeLabel(s: string): string {
@@ -593,17 +580,9 @@
 				</div>
 			</div>
 			{:else if sidebarMode === 'photo'}
-				{#if photoStep === 'capture'}
 					<div class="photo-capture-area">
 						<CameraCapture onCapture={handleCapture} />
 					</div>
-				{:else if rawPhoto}
-					<MeasurementCanvas
-						photoUrl={rawPhoto}
-						onComplete={handleMeasureComplete}
-						onCancel={() => { rawPhoto = null; photoStep = 'capture'; }}
-					/>
-				{/if}
 			{:else}
 				<!-- Photo (optional) -->
 				<div class="sidebar-photo">

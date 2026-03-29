@@ -1,46 +1,28 @@
 <script lang="ts">
-	import type { Dimensions } from '$lib/types';
 	import CameraCapture from '$lib/components/CameraCapture.svelte';
-	import MeasurementCanvas from '$lib/components/MeasurementCanvas.svelte';
 	import ItemForm from '$lib/components/ItemForm.svelte';
 
-	let photoUrl = $state<string | null>(null);
-	let measuredDims = $state<Dimensions | null>(null);
 	let finalPhoto = $state<string | null>(null);
 
-	type FlowStep = 'capture' | 'measure' | 'form';
+	type FlowStep = 'capture' | 'form';
 	let flowStep = $state<FlowStep>('capture');
 
 	function handleCapture(dataUrl: string) {
-		photoUrl = dataUrl;
-		flowStep = 'measure';
-	}
-
-	function handleMeasureComplete(dims: Dimensions, photo: string) {
-		measuredDims = dims;
-		finalPhoto = photo;
+		finalPhoto = dataUrl;
 		flowStep = 'form';
 	}
 
-	function handleMeasureCancel() {
-		photoUrl = null;
-		flowStep = 'capture';
-	}
-
 	function handleFormBack() {
-		flowStep = 'measure';
+		flowStep = 'capture';
 	}
 
 	function handleManualEntry() {
 		const placeholder = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="#1a1a1a" width="200" height="200"/><text x="50%" y="50%" fill="#737373" text-anchor="middle" dy=".3em" font-family="sans-serif" font-size="40">&#x1F4E6;</text></svg>');
-		measuredDims = { l: 0, w: 0, h: 0 };
 		finalPhoto = placeholder;
 		flowStep = 'form';
 	}
 
 	function resetFlow() {
-		photoUrl = null;
-		measuredDims = null;
 		finalPhoto = null;
 		flowStep = 'capture';
 	}
@@ -65,16 +47,10 @@
 				Add Manually
 			</button>
 		</div>
-	{:else if flowStep === 'measure' && photoUrl}
-		<MeasurementCanvas
-			{photoUrl}
-			onComplete={handleMeasureComplete}
-			onCancel={handleMeasureCancel}
-		/>
-	{:else if flowStep === 'form' && measuredDims && finalPhoto}
+	{:else if flowStep === 'form' && finalPhoto}
 		<ItemForm
 			photo={finalPhoto}
-			dimensions={measuredDims}
+			dimensions={{ l: 0, w: 0, h: 0 }}
 			onBack={handleFormBack}
 		/>
 	{/if}
