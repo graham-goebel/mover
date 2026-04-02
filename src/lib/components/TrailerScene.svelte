@@ -3,21 +3,51 @@
 	import { OrbitControls, Text, GLTF } from '@threlte/extras';
 	import type { PackedItem, TrailerPreset } from '$lib/types';
 	import * as THREE from 'three';
+	import { browser } from '$app/environment';
 	import { createItemMesh, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
 	import { resolveModelUrl } from '$lib/utils/generate3d';
+	import { addPhotoTextureToShapeClone, isUsableItemPhoto, applyTextureToGroupMaterials, getSharedPhotoTexture } from '$lib/utils/itemTexture';
+	import { BUNDLED_MODEL_PATHS, getBundledModelGroup, cloneBundledModel } from '$lib/utils/shapeModels';
 	import SceneSetup from './SceneSetup.svelte';
 	import DragController from './DragController.svelte';
+
+	// Track light/dark theme so grid and floor colors can adapt
+	let isLight = $state(false);
+	$effect(() => {
+		if (!browser) return;
+		const update = () => { isLight = document.documentElement.dataset.theme === 'light'; };
+		update();
+		const obs = new MutationObserver(update);
+		obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+		return () => obs.disconnect();
+	});
 
 	interface Props {
 		trailer: TrailerPreset;
 		packedItems: PackedItem[];
 		loadStep: number;
-		selectedItemId: string | null;
-		onSelectItem: (id: string | null) => void;
+		selectedItemIds: Set<string>;
+		snapTargetId?: string | null;
+		onSelectItem: (id: string, shift: boolean) => void;
+		onClickEmpty?: () => void;
+		onDragStart?: (id: string) => void;
 		onMoveItem?: (id: string, position: { x: number; y: number; z: number }) => void;
+		/** Map item photos onto procedural shapes (couch, chair, etc.); ignored for GLB scans. */
+		wrapPhotoOnShapes?: boolean;
 	}
 
-	let { trailer, packedItems, loadStep, selectedItemId, onSelectItem, onMoveItem }: Props = $props();
+	let {
+		trailer,
+		packedItems,
+		loadStep,
+		selectedItemIds,
+		snapTargetId = null,
+		onSelectItem,
+		onClickEmpty,
+		onDragStart,
+		onMoveItem,
+		wrapPhotoOnShapes = false
+	}: Props = $props();
 
 	const SCALE = 0.02;
 
@@ -52,6 +82,7 @@
 
 	function handleDragStart(id: string) {
 		dragId = id;
+		onDragStart?.(id);
 	}
 
 	function handleDragMove(id: string, pos: { x: number; y: number; z: number }) {
@@ -86,9 +117,81 @@
 		blobUrlCache.set(idbUrl, url);
 		return url;
 	}
+
+	const texturedMeshCache = new Map<string, Promise<THREE.Group>>();
+
+	function texturedMeshCacheKey(packed: PackedItem): string {
+		const scl = itemScale(packed);
+		return `${packed.item.id}\0${packed.item.photo}\0${packed.color}\0${scl.join(',')}`;
+	}
+
+	function getTexturedShapeDisplayMesh(packed: PackedItem): Promise<THREE.Group> {
+		const key = texturedMeshCacheKey(packed);
+		let pending = texturedMeshCache.get(key);
+		if (!pending) {
+			pending = (async () => {
+				const base = getShapeMesh(packed);
+				return addPhotoTextureToShapeClone(base, packed.item.photo);
+			})();
+			texturedMeshCache.set(key, pending);
+		}
+		return pending;
+	}
+
+	function plainShapeClone(packed: PackedItem): THREE.Group {
+		return getShapeMesh(packed).clone() as THREE.Group;
+	}
+
+	// ---- Bundled model cache ----------------------------------------
+	// Key: itemId + shape + photo (if photo texture requested) + scale
+	const bundledMeshCache = new Map<string, Promise<THREE.Group>>();
+
+	function bundledMeshCacheKey(packed: PackedItem): string {
+		const scl = itemScale(packed);
+		const photoKey = (wrapPhotoOnShapes && isUsableItemPhoto(packed.item.photo))
+			? packed.item.photo
+			: 'nophoto';
+		return `${packed.item.shape}\0${photoKey}\0${scl.join(',')}`;
+	}
+
+	function getBundledDisplayMesh(packed: PackedItem): Promise<THREE.Group> {
+		const key = bundledMeshCacheKey(packed);
+		let p = bundledMeshCache.get(key);
+		if (!p) {
+			const scl = itemScale(packed);
+			const modelPath = BUNDLED_MODEL_PATHS[packed.item.shape]!;
+			p = (async () => {
+				const base = await getBundledModelGroup(modelPath);
+				// Clone preserves the normalisation scale/position baked in by _loadAndNormalise.
+				// Wrap in a parent group and scale that instead — replacing clone.scale would
+				// break the centering offset computed during normalisation.
+				const clone = cloneBundledModel(base);
+				const wrapper = new THREE.Group();
+				wrapper.add(clone);
+				wrapper.scale.set(scl[0], scl[1], scl[2]);
+
+				// Optionally apply item photo as texture
+				if (wrapPhotoOnShapes && isUsableItemPhoto(packed.item.photo)) {
+					try {
+						const tex = await getSharedPhotoTexture(packed.item.photo);
+						applyTextureToGroupMaterials(clone, tex);
+					} catch {
+						// Texture failed — render without photo
+					}
+				}
+				return wrapper;
+			})();
+			bundledMeshCache.set(key, p);
+		}
+		return p;
+	}
+
+	function hasBundledModel(packed: PackedItem): boolean {
+		return packed.item.shape in BUNDLED_MODEL_PATHS;
+	}
 </script>
 
-<Canvas>
+<Canvas rendererParameters={{ alpha: true }}>
 	<SceneSetup />
 	<DragController
 		{packedItems}
@@ -96,8 +199,9 @@
 		scale={SCALE}
 		trailerSceneLength={tl}
 		trailerSceneWidth={tw}
-		{selectedItemId}
-		{onSelectItem}
+		{selectedItemIds}
+		onSelectItem={onSelectItem}
+		onClickEmpty={() => onClickEmpty?.()}
 		onDragStart={handleDragStart}
 		onDragMove={handleDragMove}
 		onDragEnd={handleDragEnd}
@@ -120,7 +224,7 @@
 	<T.DirectionalLight position={[5, 8, 5]} intensity={0.8} castShadow />
 	<T.DirectionalLight position={[-3, 4, -3]} intensity={0.3} />
 
-	<T.GridHelper args={[Math.max(tl, tw) * 3, 20, '#262626', '#1a1a1a']} />
+	<T.GridHelper args={[Math.max(tl, tw) * 3, 20, isLight ? '#c4c4c4' : '#262626', isLight ? '#d4d4d4' : '#1a1a1a']} />
 
 	<!-- Trailer wireframe -->
 	<T.Mesh position={[0, th / 2, 0]}>
@@ -131,7 +235,7 @@
 	<!-- Trailer floor -->
 	<T.Mesh position={[0, 0.001, 0]} rotation.x={-Math.PI / 2}>
 		<T.PlaneGeometry args={[tl, tw]} />
-		<T.MeshStandardMaterial color="#111111" transparent opacity={0.8} />
+		<T.MeshStandardMaterial color={isLight ? '#d0d0d0' : '#111111'} transparent opacity={0.8} />
 	</T.Mesh>
 
 	<Text
@@ -163,33 +267,63 @@
 	{#each visibleItems as packed (packed.item.id)}
 		{@const pos = itemPosition(packed)}
 		{@const scl = itemScale(packed)}
-		{@const isSelected = selectedItemId === packed.item.id}
+		{@const isSelected = selectedItemIds.has(packed.item.id)}
+		{@const isSnapTarget = snapTargetId === packed.item.id}
 		{@const isBeingDragged = dragId === packed.item.id}
 
 		<T.Group position={pos}>
 			{#if packed.item.modelUrl}
+				<!-- Priority 1: user-generated GLB from photo scan -->
 				{#key packed.item.modelUrl}
 					{#await resolveUrl(packed.item.modelUrl) then blobUrl}
 						{#if blobUrl}
 							<GLTF url={blobUrl} scale={[scl[0], scl[1], scl[2]]} />
 						{:else}
-							{@const shapeMesh = getShapeMesh(packed)}
-							<T is={shapeMesh.clone()} />
+							<!-- GLB resolved to nothing — fall through to bundled/procedural -->
+							{#if hasBundledModel(packed)}
+								{#await getBundledDisplayMesh(packed) then mesh}
+									<T is={mesh} />
+								{:catch}
+									<T is={plainShapeClone(packed)} />
+								{/await}
+							{:else if wrapPhotoOnShapes && isUsableItemPhoto(packed.item.photo)}
+								{#await getTexturedShapeDisplayMesh(packed) then mesh}
+									<T is={mesh} />
+								{:catch}
+									<T is={plainShapeClone(packed)} />
+								{/await}
+							{:else}
+								<T is={plainShapeClone(packed)} />
+							{/if}
 						{/if}
 					{/await}
 				{/key}
+			{:else if hasBundledModel(packed)}
+				<!-- Priority 2: bundled open-source model (with optional photo texture) -->
+				{#await getBundledDisplayMesh(packed) then mesh}
+					<T is={mesh} />
+				{:catch}
+					<T is={plainShapeClone(packed)} />
+				{/await}
+			{:else if wrapPhotoOnShapes && isUsableItemPhoto(packed.item.photo)}
+				<!-- Priority 3: photo texture on procedural shape -->
+				{#await getTexturedShapeDisplayMesh(packed) then mesh}
+					<T is={mesh} />
+				{:catch}
+					<T is={plainShapeClone(packed)} />
+				{/await}
 			{:else}
-				{@const shapeMesh = getShapeMesh(packed)}
-				<T is={shapeMesh.clone()} />
+				<!-- Priority 4: plain procedural shape -->
+				<T is={plainShapeClone(packed)} />
 			{/if}
 
 			<!-- Bounding box wireframe -->
 			<T.LineSegments>
 				<T.EdgesGeometry args={[new THREE.BoxGeometry(...scl)]} />
 				<T.LineBasicMaterial
-					color={isSelected ? (isBeingDragged ? '#facc15' : '#ffffff') : '#000000'}
+					color={isSelected ? (isBeingDragged ? '#facc15' : '#ffffff') : isSnapTarget ? '#f97316' : '#000000'}
 					transparent
-					opacity={isSelected ? 1 : 0.15}
+					opacity={isSelected ? 1 : isSnapTarget ? 0.9 : 0.15}
 				/>
 			</T.LineSegments>
 

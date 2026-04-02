@@ -17,107 +17,35 @@
 		fieldId = 'item-flags'
 	}: Props = $props();
 
-	let open = $state(false);
-	let rootEl = $state<HTMLDivElement | undefined>(undefined);
-
-	const summary = $derived.by(() => {
-		const parts: string[] = [];
-		if (important) parts.push('⭐ Important');
-		if (forSale) parts.push('For sale');
-		if (fragile) parts.push('Fragile');
-		parts.push(stackable ? 'Stackable' : 'Not stackable');
-		if (donate) parts.push('Donate');
-		return parts.join(' · ');
-	});
-
-	function toggleOpen(e: MouseEvent) {
-		e.stopPropagation();
-		open = !open;
-	}
-
-	$effect(() => {
-		if (!open) return;
-		const onDoc = (e: MouseEvent) => {
-			const t = e.target as Node;
-			if (rootEl && !rootEl.contains(t)) open = false;
-		};
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') open = false;
-		};
-		const id = requestAnimationFrame(() => {
-			document.addEventListener('click', onDoc, true);
-		});
-		document.addEventListener('keydown', onKey);
-		return () => {
-			cancelAnimationFrame(id);
-			document.removeEventListener('click', onDoc, true);
-			document.removeEventListener('keydown', onKey);
-		};
-	});
+	const tags = $derived([
+		{ key: 'important', label: 'Important', icon: '⭐', active: important, toggle: () => (important = !important) },
+		{ key: 'fragile',   label: 'Fragile',   icon: '⚠️', active: fragile,   toggle: () => (fragile   = !fragile)   },
+		{ key: 'stackable', label: 'Stackable', icon: '📚', active: stackable, toggle: () => (stackable = !stackable) },
+		{ key: 'forSale',   label: 'For sale',  icon: '🏷️', active: forSale,   toggle: () => (forSale   = !forSale)   },
+		{ key: 'donate',    label: 'Donate',    icon: '🎁', active: donate,    toggle: () => (donate    = !donate)    },
+	]);
 </script>
 
-<div class="flags-root" bind:this={rootEl}>
+<div class="flags-field">
 	<span class="field-label" id="{fieldId}-label">Item tags</span>
-	<button
-		type="button"
-		class="flags-trigger"
-		aria-expanded={open}
-		aria-haspopup="true"
-		aria-controls="{fieldId}-panel"
-		aria-labelledby="{fieldId}-label"
-		onclick={toggleOpen}
-	>
-		<span class="flags-summary">{summary}</span>
-		<svg
-			class="chevron"
-			class:open
-			width="18"
-			height="18"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="round"
-			aria-hidden="true"
-		>
-			<polyline points="6 9 12 15 18 9" />
-		</svg>
-	</button>
-
-	{#if open}
-		<div
-			id="{fieldId}-panel"
-			class="flags-panel"
-			role="group"
-			aria-labelledby="{fieldId}-label"
-		>
-			<label class="flags-option">
-				<input type="checkbox" bind:checked={important} />
-				<span>⭐ Important</span>
-			</label>
-			<label class="flags-option">
-				<input type="checkbox" bind:checked={forSale} />
-				<span>For sale</span>
-			</label>
-			<label class="flags-option">
-				<input type="checkbox" bind:checked={fragile} />
-				<span>Fragile</span>
-			</label>
-			<label class="flags-option">
-				<input type="checkbox" bind:checked={stackable} />
-				<span>Stackable</span>
-			</label>
-			<label class="flags-option">
-				<input type="checkbox" bind:checked={donate} />
-				<span>Donate</span>
-			</label>
-		</div>
-	{/if}
+	<div class="tag-strip" role="group" aria-labelledby="{fieldId}-label">
+		{#each tags as tag (tag.key)}
+			<button
+				type="button"
+				class="tag-chip"
+				class:active={tag.active}
+				onclick={tag.toggle}
+				aria-pressed={tag.active}
+			>
+				<span class="tag-icon">{tag.icon}</span>
+				<span class="tag-label">{tag.label}</span>
+			</button>
+		{/each}
+	</div>
 </div>
 
 <style>
-	.flags-root {
-		position: relative;
+	.flags-field {
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
@@ -131,82 +59,53 @@
 		letter-spacing: 0.04em;
 	}
 
-	.flags-trigger {
+	.tag-strip {
 		display: flex;
+		gap: 6px;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		padding-bottom: 2px;
+	}
+
+	.tag-strip::-webkit-scrollbar {
+		display: none;
+	}
+
+	.tag-chip {
+		display: inline-flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		width: 100%;
-		padding: 14px 16px;
-		text-align: left;
-		font-size: 14px;
+		gap: 5px;
+		padding: 7px 12px;
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-pill);
+		background: transparent;
+		color: var(--color-text-secondary);
+		font-size: 13px;
 		font-weight: 500;
-		color: var(--color-text-primary);
-		background: var(--color-bg-card);
-		border: none;
-		border-radius: var(--radius-lg);
+		font-family: inherit;
+		white-space: nowrap;
 		cursor: pointer;
-		box-shadow: inset 0 0 0 1px var(--color-border-subtle);
-		transition: background 0.2s ease, box-shadow 0.2s ease;
-	}
-
-	.flags-trigger:hover {
-		background: var(--color-bg-elevated);
-	}
-
-	.flags-summary {
-		flex: 1;
-		min-width: 0;
-		line-height: 1.35;
-	}
-
-	.chevron {
 		flex-shrink: 0;
-		color: var(--color-text-muted);
-		transition: transform 0.2s;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s;
 	}
 
-	.chevron.open {
-		transform: rotate(180deg);
+	.tag-chip:hover {
+		border-color: rgba(255, 255, 255, 0.2);
+		color: var(--color-text-primary);
 	}
 
-	.flags-panel {
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: calc(100% + 6px);
-		z-index: 20;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		padding: 8px;
-		background: var(--color-bg-elevated);
-		border: none;
-		border-radius: var(--radius-lg);
-		box-shadow:
-			0 0 0 1px var(--color-border-subtle),
-			0 12px 40px rgba(0, 0, 0, 0.4);
+	.tag-chip.active {
+		background: var(--color-accent-soft);
+		border-color: var(--color-accent);
+		color: var(--color-text-primary);
 	}
 
-	.flags-option {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 10px 12px;
-		border-radius: var(--radius-sm);
-		font-size: 15px;
-		cursor: pointer;
-		user-select: none;
-	}
-
-	.flags-option:hover {
-		background: var(--color-bg-card);
-	}
-
-	.flags-option input {
-		width: 18px;
-		height: 18px;
-		accent-color: var(--color-accent);
-		cursor: pointer;
+	.tag-icon {
+		font-size: 14px;
+		line-height: 1;
 	}
 </style>

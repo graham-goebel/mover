@@ -4,6 +4,7 @@
 	import { arDepthAvailable } from '$lib/stores/app';
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
+	import ShapePicker from './ShapePicker.svelte';
 	import { generate3DModel, getDepthSource, type Generate3DStatus } from '$lib/utils/generate3d';
 	import ItemCard from './ItemCard.svelte';
 	import ContentsEditor from './ContentsEditor.svelte';
@@ -54,8 +55,17 @@
 
 	// Mobile bottom-sheet state — auto-opens when sidebar mode is active
 	let sheetState = $state<'peek' | 'full'>('peek');
-	// peekHeight = pill(20) + sidebar-header(~52px) ≈ 72px
-	const SHEET_PEEK_H = 72;
+	const SHEET_PEEK_H = 84;
+
+	let isDesktop = $state(false);
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const mq = window.matchMedia('(min-width: 768px)');
+		isDesktop = mq.matches;
+		const onChange = (e: MediaQueryListEvent) => { isDesktop = e.matches; };
+		mq.addEventListener('change', onChange);
+		return () => mq.removeEventListener('change', onChange);
+	});
 
 	$effect(() => {
 		if (sidebarMode !== 'home') sheetState = 'full';
@@ -91,11 +101,22 @@
 		{ label: 'Dish\n18×18×28', l: 18, w: 18, h: 28 },
 	];
 
+	// HDX tote sizes (Home Depot orange bins — exterior dimensions, rounded to nearest inch)
+	const BIN_PRESETS: { label: string; l: number; w: number; h: number }[] = [
+		{ label: '5 Gal\n15×10×10', l: 15, w: 10, h: 10 },
+		{ label: '8 Gal\n17×14×12', l: 17, w: 14, h: 12 },
+		{ label: '12 Gal\n20×15×12', l: 20, w: 15, h: 12 },
+		{ label: '18 Gal\n23×16×14', l: 23, w: 16, h: 14 },
+		{ label: '27 Gal\n24×19×15', l: 24, w: 19, h: 15 },
+		{ label: '35 Gal\n24×19×19', l: 24, w: 19, h: 19 },
+		{ label: '66 Gal\n39×21×22', l: 39, w: 21, h: 22 },
+	];
+
 	const categories: { value: ItemCategory; label: string; icon: string }[] = [
 		{ value: 'box', label: 'Box', icon: '📦' },
+		{ value: 'bin', label: 'Bin', icon: '🗑️' },
 		{ value: 'furniture', label: 'Furniture', icon: '🪑' },
 		{ value: 'appliance', label: 'Appliance', icon: '🔌' },
-		{ value: 'fragile', label: 'Fragile', icon: '⚠️' },
 		{ value: 'oddShape', label: 'Odd Shape', icon: '🔷' },
 		{ value: 'other', label: 'Other', icon: '📋' }
 	];
@@ -103,9 +124,9 @@
 	const filters: { value: ItemCategory | 'all'; label: string }[] = [
 		{ value: 'all', label: 'All' },
 		{ value: 'box', label: 'Boxes' },
+		{ value: 'bin', label: 'Bins' },
 		{ value: 'furniture', label: 'Furniture' },
 		{ value: 'appliance', label: 'Appliances' },
-		{ value: 'fragile', label: 'Fragile' },
 		{ value: 'oddShape', label: 'Odd shape' },
 		{ value: 'other', label: 'Other' }
 	];
@@ -146,6 +167,14 @@
 	const totalVolume = $derived(
 		items.reduce((sum, it) => sum + volumeCuFt(it.dimensions.l, it.dimensions.w, it.dimensions.h), 0)
 	);
+
+	const totalWeight = $derived(
+		items.reduce((sum, it) => sum + (it.weight ?? 0), 0)
+	);
+
+	function fmtVol(n: number): string {
+		return n >= 10 ? `${Math.round(n)}` : `${Math.round(n * 10) / 10}`;
+	}
 
 	const vol = $derived(volumeCuFt(l, w, h));
 
@@ -253,7 +282,7 @@
 			room: roomFromPresetAndCustom(roomPreset, roomCustom),
 			modelUrl: modelUrl || undefined,
 			contents:
-				category === 'box' || shape === 'bin' ? [...draftContents] : [],
+				category === 'box' || category === 'bin' || shape === 'bin' ? [...draftContents] : [],
 			notes: notes || undefined
 		});
 		switchToHome();
@@ -409,6 +438,32 @@
 	<!-- Left sidebar / mobile bottom sheet -->
 	<div class="left-panel">
 		<BottomSheet bind:value={sheetState} peekHeight={SHEET_PEEK_H}>
+
+		<!-- Peek pill: collapsed inventory summary (mobile only) -->
+		{#if !isDesktop}
+		<div class="peek-pill" role="button" tabindex="0"
+			onclick={() => sheetState = 'full'}
+			onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') sheetState = 'full'; }}
+			aria-label="Expand inventory"
+		>
+			<div class="peek-pill-body">
+				<span class="peek-pill-count">{items.length} items</span>
+				<span class="peek-pill-sub">
+					{#if totalWeight > 0}{totalWeight} lbs · {/if}{fmtVol(totalVolume)} ft³
+				</span>
+			</div>
+			<div class="peek-pill-actions" role="none" onclick={(e) => e.stopPropagation()}>
+				<button class="peek-icon-btn" onclick={() => { sheetState = 'full'; }} aria-label="Filters">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+				</button>
+				<button class="peek-icon-btn" onclick={() => { sheetState = 'full'; sidebarMode = 'add'; }} aria-label="Add item">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+				</button>
+			</div>
+		</div>
+		{/if}
+
+		{#if isDesktop || sheetState === 'full'}
 		<div class="sidebar-header" class:sidebar-header-home={sidebarMode === 'home'}>
 			{#if sidebarMode === 'home'}
 				<h1 class="sidebar-title">Filters</h1>
@@ -416,8 +471,8 @@
 				<button class="sidebar-back" onclick={switchToHome} aria-label="Back">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
 				</button>
-				<h2>Item Details</h2>
-				<button class="sidebar-action" onclick={startEditing}>Edit</button>
+				<h2 class="sidebar-item-name">{editingItem?.name ?? 'Item Details'}</h2>
+				<button class="sidebar-action sidebar-action--outline" onclick={startEditing}>Edit</button>
 			{:else if sidebarMode === 'edit'}
 				<button class="sidebar-back" onclick={() => editingId ? switchToView(editingId) : switchToHome()} aria-label="Cancel edit">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -591,7 +646,7 @@
 							<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
 							<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
 						</svg>
-						Duplicate &amp; Edit
+						Duplicate
 					</button>
 				</div>
 			</div>
@@ -730,18 +785,29 @@
 							<p class="dim-summary">{vol} cu ft</p>
 						{/if}
 
-						{#if category === 'box'}
-							<div class="box-presets">
-								{#each BOX_PRESETS as preset}
-									<button
-										type="button"
-										class="box-preset-btn"
-										class:active={l === preset.l && w === preset.w && h === preset.h}
-										onclick={() => { l = preset.l; w = preset.w; h = preset.h; }}
-									>{preset.label}</button>
-								{/each}
-							</div>
-						{/if}
+					{#if category === 'box'}
+						<div class="box-presets">
+							{#each BOX_PRESETS as preset}
+								<button
+									type="button"
+									class="box-preset-btn"
+									class:active={l === preset.l && w === preset.w && h === preset.h}
+									onclick={() => { l = preset.l; w = preset.w; h = preset.h; }}
+								>{preset.label}</button>
+							{/each}
+						</div>
+					{:else if category === 'bin'}
+						<div class="box-presets">
+							{#each BIN_PRESETS as preset}
+								<button
+									type="button"
+									class="box-preset-btn"
+									class:active={l === preset.l && w === preset.w && h === preset.h}
+									onclick={() => { l = preset.l; w = preset.w; h = preset.h; }}
+								>{preset.label}</button>
+							{/each}
+						</div>
+					{/if}
 					</div>
 
 					<div class="field">
@@ -751,11 +817,7 @@
 
 					<div class="field">
 						<label class="field-label" for="item-shape">3D Shape</label>
-						<select id="item-shape" class="shape-select" bind:value={shape}>
-							{#each SHAPE_OPTIONS as s}
-								<option value={s.value}>{s.icon} {s.label}</option>
-							{/each}
-						</select>
+						<ShapePicker bind:value={shape} id="item-shape" />
 					</div>
 
 					<ItemFlagsDropdown
@@ -767,7 +829,7 @@
 						fieldId="sidebar-item-flags"
 					/>
 
-					{#if sidebarMode === 'add' && (category === 'box' || shape === 'bin')}
+					{#if sidebarMode === 'add' && (category === 'box' || category === 'bin' || shape === 'bin')}
 						<ContentsEditor
 							draft={true}
 							contents={draftContents}
@@ -802,6 +864,7 @@
 				</div>
 			{/if}
 		</div>
+		{/if}
 		</BottomSheet>
 	</div>
 	<!-- Right: inventory list -->
@@ -878,6 +941,57 @@
 		display: contents;
 	}
 
+	/* ── Peek pill (collapsed sheet summary) ────────────────────────── */
+	.peek-pill {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 2px 14px 6px;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.peek-pill-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.peek-pill-count {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.peek-pill-sub {
+		font-size: 11px;
+		color: var(--color-text-muted);
+	}
+
+	.peek-pill-actions {
+		display: flex;
+		gap: 2px;
+		flex-shrink: 0;
+	}
+
+	.peek-icon-btn {
+		width: 30px;
+		height: 30px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 6px;
+		color: var(--color-text-muted);
+		transition: all 0.12s;
+	}
+
+	.peek-icon-btn:hover {
+		background: var(--color-bg-elevated);
+		color: var(--color-text);
+	}
+
 	.sidebar-header {
 		display: flex;
 		align-items: center;
@@ -902,6 +1016,13 @@
 		font-weight: 600;
 	}
 
+	.sidebar-item-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+	}
+
 	.sidebar-back {
 		padding: 6px;
 		color: var(--color-accent);
@@ -914,6 +1035,16 @@
 		font-size: 14px;
 		font-weight: 600;
 		border-radius: var(--radius-sm);
+	}
+
+	.sidebar-action--outline {
+		background: transparent;
+		color: var(--color-text-primary);
+		box-shadow: inset 0 0 0 1.5px var(--color-border);
+	}
+
+	.sidebar-action--outline:hover {
+		box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.2);
 	}
 
 	.sidebar-action:disabled {
@@ -1465,13 +1596,6 @@
 	.cat-icon { font-size: 18px; }
 	.cat-label { font-size: 11px; font-weight: 500; }
 
-	.shape-select {
-		width: 100%;
-		cursor: pointer;
-		appearance: auto;
-		color-scheme: dark;
-	}
-
 	textarea {
 		resize: vertical;
 		min-height: 50px;
@@ -1541,9 +1665,8 @@
 		z-index: 210; /* above the sheet */
 		left: 20px;
 		right: 20px;
-		/* Float 12px above the top edge of the peek mini-card */
-		bottom: calc(var(--safe-area-bottom, 0px) + 8px + 72px + 12px);
-		display: flex;
+		bottom: calc(var(--safe-area-bottom, 0px) + 8px + 80px + 12px);
+		display: none;
 		align-items: center;
 		justify-content: center;
 		gap: 8px;
@@ -1566,7 +1689,7 @@
 	}
 
 	.inv-home .inv-scroll {
-		padding-bottom: calc(148px + var(--safe-area-bottom));
+		padding-bottom: calc(100px + var(--safe-area-bottom));
 	}
 
 	/* Inventory header */
@@ -1722,11 +1845,11 @@
 		}
 
 		.add-item-float {
+			display: flex;
 			z-index: 40;
 			left: 20px;
 			right: auto;
 			width: calc(var(--sidebar-width) - 40px);
-			/* On desktop sit above the tab bar as before */
 			bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 10px);
 		}
 

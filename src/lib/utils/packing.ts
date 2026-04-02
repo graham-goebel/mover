@@ -13,11 +13,17 @@ interface Placement {
 	box: Box;
 }
 
-const ITEM_COLORS = [
+export const ITEM_COLORS = [
 	'#8b9dc3', '#a3a3a3', '#c4956a', '#8fae8b', '#b399c6',
 	'#c49898', '#7fb5b5', '#c4b97f', '#9e8fae', '#89a8c4',
 	'#ae9e8f', '#8fae9e', '#b5a37f', '#a3899e', '#7faeb5'
 ];
+
+/** Returns a stable room→color map for a list of items (sorted alpha by room). */
+export function buildRoomColorMap(items: { room?: string }[]): Map<string, string> {
+	const rooms = [...new Set(items.map(i => i.room ?? ''))].sort();
+	return new Map(rooms.map((r, i) => [r, ITEM_COLORS[i % ITEM_COLORS.length]]));
+}
 
 /**
  * Generate all distinct rotation orientations of a box.
@@ -75,6 +81,71 @@ function canPlace(
 }
 
 /**
+ * Axis-aligned 3D overlap for packed boxes (same convention as canPlace:
+ * extent along x = l, z = w, y = h).
+ */
+export function packedBoxesOverlap(
+	ax: number,
+	ay: number,
+	az: number,
+	al: number,
+	aw: number,
+	ah: number,
+	bx: number,
+	by: number,
+	bz: number,
+	bl: number,
+	bw: number,
+	bh: number
+): boolean {
+	return (
+		ax < bx + bl &&
+		ax + al > bx &&
+		ay < by + bh &&
+		ay + ah > by &&
+		az < bz + bw &&
+		az + aw > bz
+	);
+}
+
+/** True if a box at candidatePos with rot would intersect another placed item. */
+export function packedItemOverlapsPeer(
+	candidatePos: { x: number; y: number; z: number },
+	rot: { l: number; w: number; h: number },
+	other: PackedItem
+): boolean {
+	const o = other;
+	return packedBoxesOverlap(
+		candidatePos.x,
+		candidatePos.y,
+		candidatePos.z,
+		rot.l,
+		rot.w,
+		rot.h,
+		o.position.x,
+		o.position.y,
+		o.position.z,
+		o.rotation.l,
+		o.rotation.w,
+		o.rotation.h
+	);
+}
+
+/** True if the item would overlap any other placed box (excluding self). */
+export function packedItemCollidesWithAnyPeer(
+	selfId: string,
+	candidatePos: { x: number; y: number; z: number },
+	rot: { l: number; w: number; h: number },
+	placed: PackedItem[]
+): boolean {
+	for (const p of placed) {
+		if (p.item.id === selfId) continue;
+		if (packedItemOverlapsPeer(candidatePos, rot, p)) return true;
+	}
+	return false;
+}
+
+/**
  * Check if any other placement sits on top of the given placement.
  * Used to enforce the "not stackable" constraint.
  */
@@ -123,6 +194,9 @@ export function packItems(items: InventoryItem[], container: TrailerPreset): Pac
 		return volB - volA;
 	});
 
+	// Assign colors by room — all items from the same room share a color.
+	const roomColorMap = buildRoomColorMap(sortedItems);
+
 	const placements: Placement[] = [];
 	const placed: PackedItem[] = [];
 	const unplaced: InventoryItem[] = [];
@@ -155,7 +229,7 @@ export function packItems(items: InventoryItem[], container: TrailerPreset): Pac
 				item,
 				position: { x: bestPlacement.x, y: bestPlacement.y, z: bestPlacement.z },
 				rotation: bestPlacement.box,
-				color: ITEM_COLORS[idx % ITEM_COLORS.length]
+				color: roomColorMap.get(item.room ?? '') ?? ITEM_COLORS[0]
 			});
 
 			const { x, y, z, box } = bestPlacement;

@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
+	import ShapePicker from './ShapePicker.svelte';
 	import type { RoomPresetId } from '$lib/utils/rooms';
 	import { roomFromPresetAndCustom } from '$lib/utils/rooms';
 	import RoomPicker from './RoomPicker.svelte';
@@ -33,9 +34,9 @@
 
 	const categories: { value: ItemCategory; label: string; icon: string }[] = [
 		{ value: 'box', label: 'Box', icon: '📦' },
+		{ value: 'bin', label: 'Bin', icon: '🗑️' },
 		{ value: 'furniture', label: 'Furniture', icon: '🪑' },
 		{ value: 'appliance', label: 'Appliance', icon: '🔌' },
-		{ value: 'fragile', label: 'Fragile', icon: '⚠️' },
 		{ value: 'oddShape', label: 'Odd Shape', icon: '🔷' },
 		{ value: 'other', label: 'Other', icon: '📋' }
 	];
@@ -104,14 +105,10 @@
 			</div>
 		</div>
 
-		<div class="field">
-			<label class="field-label" for="form-item-shape">3D Shape</label>
-			<select id="form-item-shape" class="shape-select" bind:value={shape}>
-				{#each SHAPE_OPTIONS as s}
-					<option value={s.value}>{s.icon} {s.label}</option>
-				{/each}
-			</select>
-		</div>
+	<div class="field">
+		<label class="field-label" for="form-item-shape">3D Shape</label>
+		<ShapePicker bind:value={shape} id="form-item-shape" />
+	</div>
 
 		<div class="photo-dims">
 			<div class="mini-photo">
@@ -264,12 +261,6 @@
 
 	.cat-icon { font-size: 20px; }
 	.cat-label { font-size: 12px; font-weight: 500; }
-
-	.shape-select {
-		width: 100%;
-		cursor: pointer;
-		color-scheme: dark;
-	}
 
 	textarea {
 		resize: vertical;

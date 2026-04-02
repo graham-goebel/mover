@@ -9,8 +9,9 @@
 		scale: number;
 		trailerSceneLength: number;
 		trailerSceneWidth: number;
-		selectedItemId: string | null;
-		onSelectItem: (id: string | null) => void;
+		selectedItemIds: Set<string>;
+		onSelectItem: (id: string, shift: boolean) => void;
+		onClickEmpty: () => void;
 		onDragStart: (id: string) => void;
 		onDragMove: (id: string, position: { x: number; y: number; z: number }) => void;
 		onDragEnd: () => void;
@@ -22,8 +23,9 @@
 		scale,
 		trailerSceneLength: tl,
 		trailerSceneWidth: tw,
-		selectedItemId,
+		selectedItemIds,
 		onSelectItem,
+		onClickEmpty,
 		onDragStart,
 		onDragMove,
 		onDragEnd
@@ -41,6 +43,8 @@
 	let offset = { x: 0, z: 0 };
 	let initialized = false;
 	let downPos = { x: 0, y: 0 };
+	let shiftOnDown = false;
+	let downOnEmpty = false;
 
 	function mouseToNDC(e: PointerEvent) {
 		const rect = renderer.domElement.getBoundingClientRect();
@@ -96,8 +100,15 @@
 		downPos = { x: e.clientX, y: e.clientY };
 
 		const id = hitTestItems(e);
-		if (!id) return;
+		if (!id) {
+			downOnEmpty = true;
+			activeId = null;
+			dragging = false;
+			return;
+		}
 
+		downOnEmpty = false;
+		shiftOnDown = e.shiftKey;
 		activeId = id;
 		dragging = false;
 		initialized = false;
@@ -151,9 +162,11 @@
 		});
 	}
 
-	function handleUp() {
+	function handleUp(fromLeave = false) {
 		if (activeId && !dragging) {
-			onSelectItem(selectedItemId === activeId ? null : activeId);
+			onSelectItem(activeId, shiftOnDown);
+		} else if (!activeId && !dragging && downOnEmpty && !fromLeave) {
+			onClickEmpty();
 		}
 		if (dragging) {
 			onDragEnd();
@@ -161,22 +174,27 @@
 		activeId = null;
 		dragging = false;
 		initialized = false;
+		downOnEmpty = false;
+		shiftOnDown = false;
 	}
 
 	$effect(() => {
 		const canvas = renderer.domElement;
 		if (!canvas) return;
 
+		const onUp = () => handleUp(false);
+		const onLeave = () => handleUp(true);
+
 		canvas.addEventListener('pointerdown', handleDown);
 		canvas.addEventListener('pointermove', handleMove);
-		canvas.addEventListener('pointerup', handleUp);
-		canvas.addEventListener('pointerleave', handleUp);
+		canvas.addEventListener('pointerup', onUp);
+		canvas.addEventListener('pointerleave', onLeave);
 
 		return () => {
 			canvas.removeEventListener('pointerdown', handleDown);
 			canvas.removeEventListener('pointermove', handleMove);
-			canvas.removeEventListener('pointerup', handleUp);
-			canvas.removeEventListener('pointerleave', handleUp);
+			canvas.removeEventListener('pointerup', onUp);
+			canvas.removeEventListener('pointerleave', onLeave);
 		};
 	});
 </script>

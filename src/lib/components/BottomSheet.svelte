@@ -140,40 +140,58 @@
 			? `--peek-h:${peekHeight}px;${dragStyle}`
 			: `--peek-h:${peekHeight}px`
 	);
+
+	// Track desktop breakpoint in JS so sheet JS is fully bypassed on wide viewports
+	let isDesktop = $state(false);
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const mq = window.matchMedia('(min-width: 768px)');
+		isDesktop = mq.matches;
+		const onChange = (e: MediaQueryListEvent) => { isDesktop = e.matches; };
+		mq.addEventListener('change', onChange);
+		return () => mq.removeEventListener('change', onChange);
+	});
 </script>
 
-<!-- Backdrop — tap to collapse -->
-{#if backdrop && value === 'full'}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="sheet-backdrop" onclick={() => value = 'peek'}></div>
-{/if}
-
-<div
-	class="bottom-sheet"
-	class:is-open={value === 'full'}
-	class:is-dragging={isDragging}
-	style={sheetStyle}
->
-	<!-- Drag handle — only this area triggers drag on mobile -->
-	<div
-		class="sheet-handle"
-		ontouchstart={onHandleTouchStart}
-		ontouchmove={onHandleTouchMove}
-		ontouchend={onHandleTouchEnd}
-		onclick={toggleSheet}
-		role="button"
-		tabindex="0"
-		aria-label={value === 'full' ? 'Minimise panel' : 'Expand panel'}
-		onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSheet(); }}
-	>
-		<div class="sheet-pill"></div>
-	</div>
-
-	<!-- Content — children own their scroll (overflow-y: auto on inner wrappers) -->
-	<div class="sheet-body">
+{#if isDesktop}
+	<!-- Desktop: plain passthrough — no positioning, no handle, no JS state -->
+	<div class="sheet-desktop">
 		{@render children()}
 	</div>
-</div>
+{:else}
+	<!-- Backdrop — tap to collapse -->
+	{#if backdrop && value === 'full'}
+		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+		<div class="sheet-backdrop" onclick={() => value = 'peek'}></div>
+	{/if}
+
+	<div
+		class="bottom-sheet"
+		class:is-open={value === 'full'}
+		class:is-dragging={isDragging}
+		style={sheetStyle}
+	>
+		<!-- Drag handle — only this area triggers drag on mobile -->
+		<div
+			class="sheet-handle"
+			ontouchstart={onHandleTouchStart}
+			ontouchmove={onHandleTouchMove}
+			ontouchend={onHandleTouchEnd}
+			onclick={toggleSheet}
+			role="button"
+			tabindex="0"
+			aria-label={value === 'full' ? 'Minimise panel' : 'Expand panel'}
+			onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleSheet(); }}
+		>
+			<div class="sheet-pill"></div>
+		</div>
+
+		<!-- Content — children own their scroll (overflow-y: auto on inner wrappers) -->
+		<div class="sheet-body">
+			{@render children()}
+		</div>
+	</div>
+{/if}
 
 <style>
 	/* ── Backdrop ──────────────────────────────────────────────────────────── */
@@ -203,10 +221,10 @@
 		border-radius: 16px;
 
 		background: var(--color-bg, #121212);
+		border: 1px solid var(--color-border-subtle, transparent);
 		box-shadow:
-			0 8px 40px rgba(0, 0, 0, 0.60),
-			0 2px 8px  rgba(0, 0, 0, 0.40),
-			inset 0 1px 0 rgba(255, 255, 255, 0.06);
+			0 4px 16px rgba(0, 0, 0, 0.12),
+			0 1px 4px rgba(0, 0, 0, 0.08);
 		overflow: hidden;
 
 		display: flex;
@@ -229,7 +247,8 @@
 		bottom: 0;
 		height: calc(100dvh - var(--tab-bar-height, 56px));
 		border-radius: 16px 16px 0 0;
-		box-shadow: 0 -2px 32px rgba(0, 0, 0, 0.55);
+		border-color: transparent;
+		box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.15);
 	}
 
 	/* Disable transition during finger drag for immediate response */
@@ -254,7 +273,7 @@
 	.sheet-pill {
 		width: 36px;
 		height: 4px;
-		background: rgba(255, 255, 255, 0.18);
+		background: var(--color-border, rgba(255, 255, 255, 0.18));
 		border-radius: 100px;
 	}
 
@@ -267,29 +286,11 @@
 		flex-direction: column;
 	}
 
-	/* ── Desktop: revert to a plain static container ──────────────────────── */
-	@media (min-width: 768px) {
-		.sheet-backdrop { display: none; }
-
-		.bottom-sheet {
-			position: static;
-			left: auto;
-			right: auto;
-			bottom: auto;
-			height: 100%;
-			border-radius: 0;
-			box-shadow: none;
-			background: var(--color-bg, #121212);
-			transition: none;
-			z-index: auto;
-			will-change: auto;
-		}
-
-		.sheet-handle { display: none; }
-
-		.sheet-body {
-			overflow-y: auto;
-			-webkit-overflow-scrolling: touch;
-		}
+	/* ── Desktop passthrough container ────────────────────────────────────── */
+	.sheet-desktop {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		overflow: hidden;
 	}
 </style>

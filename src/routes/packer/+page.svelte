@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import type { PackedItem, TrailerPreset, PackResult, InventoryItem } from '$lib/types';
 	import { trailer, packResult, loadOrderStep, TRAILER_PRESETS, packResultToRemote } from '$lib/stores/trailer';
 	import { inventory } from '$lib/stores/inventory';
-	import { packItems } from '$lib/utils/packing';
+	import { packItems, packedItemCollidesWithAnyPeer, buildRoomColorMap } from '$lib/utils/packing';
 	import { SHAPE_OPTIONS } from '$lib/utils/shapes';
 	import { syncTrailer, syncPackState } from '$lib/stores/sync';
 	import TrailerScene from '$lib/components/TrailerScene.svelte';
@@ -11,7 +12,14 @@
 	let currentTrailer = $state<TrailerPreset>({ ...TRAILER_PRESETS[2] });
 	let result = $state<PackResult | null>(null);
 	let step = $state(0);
-	let selectedItemId = $state<string | null>(null);
+	/** Set of all selected placed-item IDs */
+	let selectedItemIds = $state(new Set<string>());
+	/** The last-clicked item (used for snap controls, detail card, drag anchor) */
+	let primarySelectedId = $state<string | null>(null);
+	/** Stack ordering: index 0 = top of stack, last index = bottom (floor) */
+	let stackOrder = $state<string[]>([]);
+	/** When set, show snap-to controls for placing primarySelected relative to this item */
+	let snapTargetId = $state<string | null>(null);
 	let items = $state<InventoryItem[]>([]);
 	let packedIds = $state(new Set<string>());
 
@@ -24,11 +32,23 @@
 	let customWidth = $state(6);
 	let customHeight = $state(6.5);
 
+	const WRAP_PHOTO_SHAPES_KEY = 'mover-wrap-photo-shapes';
+	let wrapPhotoOnShapes = $state(
+		browser && typeof localStorage !== 'undefined' && localStorage.getItem(WRAP_PHOTO_SHAPES_KEY) === '1'
+	);
+
+	$effect(() => {
+		if (browser && typeof localStorage !== 'undefined') {
+			localStorage.setItem(WRAP_PHOTO_SHAPES_KEY, wrapPhotoOnShapes ? '1' : '0');
+		}
+	});
+
 	function selectPreset(preset: TrailerPreset) {
 		trailer.select(preset);
 		syncTrailer(preset);
 		showCustomTrailer = false;
 		trailerDropdownOpen = false;
+		repackAfterTrailerChange();
 	}
 
 	function applyCustomTrailer() {
@@ -37,15 +57,31 @@
 		syncTrailer(custom);
 		showCustomTrailer = false;
 		trailerDropdownOpen = false;
+		repackAfterTrailerChange();
+	}
+
+	function repackAfterTrailerChange() {
+		if (packedIds.size === 0) return;
+		// Defer so currentTrailer has updated from the store subscription
+		setTimeout(() => repack(), 0);
 	}
 
 	// Mobile bottom-sheet state — auto-opens when an item is selected
 	let sheetState = $state<'peek' | 'full'>('peek');
-	// peekHeight = pill(20) + packer-header(~60px) ≈ 80px
-	const SHEET_PEEK_H = 80;
+	const SHEET_PEEK_H = 84;
+
+	let isDesktop = $state(false);
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const mq = window.matchMedia('(min-width: 768px)');
+		isDesktop = mq.matches;
+		const onChange = (e: MediaQueryListEvent) => { isDesktop = e.matches; };
+		mq.addEventListener('change', onChange);
+		return () => mq.removeEventListener('change', onChange);
+	});
 
 	$effect(() => {
-		if (selectedItemId) sheetState = 'full';
+		if (selectedItemIds.size > 0) sheetState = 'full';
 	});
 
 	trailer.subscribe((v) => currentTrailer = v);
@@ -89,30 +125,74 @@
 		const next = new Set(packedIds);
 		next.delete(id);
 		packedIds = next;
-		if (selectedItemId === id) selectedItemId = null;
+		if (primarySelectedId === id) primarySelectedId = null;
+		const nextSel = new Set(selectedItemIds);
+		nextSel.delete(id);
+		selectedItemIds = nextSel;
+		stackOrder = stackOrder.filter(s => s !== id);
 		repack();
 	}
 
-	function handleItemClick(id: string) {
-		const isPacked = liveResult?.placed.some(p => p.item.id === id);
-		if (isPacked) {
-			selectedItemId = selectedItemId === id ? null : id;
+	/** Unified select handler for both 3D canvas clicks and sidebar list clicks */
+	function handleSelect(id: string, shift: boolean) {
+		if (shift) {
+			// Shift-click: multi-select
+			snapTargetId = null;
+			const next = new Set(selectedItemIds);
+			if (next.has(id)) {
+				next.delete(id);
+				if (primarySelectedId === id) primarySelectedId = [...next].pop() ?? null;
+			} else {
+				next.add(id);
+				primarySelectedId = id;
+			}
+			selectedItemIds = next;
+		} else if (primarySelectedId && primarySelectedId !== id && selectedItemIds.has(primarySelectedId)) {
+			// Click a different item while one is selected → snap target mode
+			// (toggle off if clicking the already-set target)
+			snapTargetId = snapTargetId === id ? null : id;
 		} else {
+			// First click, re-click same item (deselect), or no current selection
+			snapTargetId = null;
+			if (selectedItemIds.size === 1 && selectedItemIds.has(id)) {
+				// Re-clicking the only selected item deselects it
+				selectedItemIds = new Set();
+				primarySelectedId = null;
+			} else {
+				selectedItemIds = new Set([id]);
+				primarySelectedId = id;
+			}
+		}
+		stackOrder = [...selectedItemIds];
+	}
+
+	function handleItemClick(id: string, shift = false) {
+		const isPacked = liveResult?.placed.some(p => p.item.id === id);
+		if (!isPacked) {
 			addItem(id);
+		} else {
+			handleSelect(id, shift);
 		}
 	}
 
 	const liveResult = $derived.by(() => {
 		if (!result) return null;
 		const itemMap = new Map(items.map(i => [i.id, i]));
+		// Recompute room→color from the current live item list so colors are always
+		// room-based even when loading a saved pack result with old index-based colors.
+		const roomColors = buildRoomColorMap(items);
 		return {
 			...result,
 			placed: result.placed
 				.filter(p => itemMap.has(p.item.id))
-				.map(p => ({
-					...p,
-					item: itemMap.get(p.item.id)!
-				})),
+				.map(p => {
+					const freshItem = itemMap.get(p.item.id)!;
+					return {
+						...p,
+						item: freshItem,
+						color: roomColors.get(freshItem.room ?? '') ?? p.color
+					};
+				}),
 			unplaced: result.unplaced
 				.map(u => itemMap.get(u.id) ?? u)
 				.filter(Boolean)
@@ -120,8 +200,30 @@
 	});
 
 	const selectedPacked = $derived(
-		liveResult?.placed.find(p => p.item.id === selectedItemId) ?? null
+		liveResult?.placed.find(p => p.item.id === primarySelectedId) ?? null
 	);
+
+	const snapTargetPacked = $derived(
+		snapTargetId ? liveResult?.placed.find(p => p.item.id === snapTargetId) ?? null : null
+	);
+
+	/** All packed items in the current selection (for multi UI) */
+	const selectedPackedItems = $derived(
+		liveResult?.placed.filter(p => selectedItemIds.has(p.item.id)) ?? []
+	);
+
+	/** True when 2+ selected items share the same x/z footprint (within 1 inch tolerance) */
+	const isStacked = $derived.by(() => {
+		if (selectedItemIds.size < 2 || !result) return false;
+		const sel = result.placed.filter(p => selectedItemIds.has(p.item.id));
+		if (sel.length < 2) return false;
+		const ref = sel[0];
+		const TOL = 1;
+		return sel.every(p =>
+			Math.abs(p.position.x - ref.position.x) < TOL &&
+			Math.abs(p.position.z - ref.position.z) < TOL
+		);
+	});
 
 	function shapeLabel(shape: string | undefined): string {
 		return SHAPE_OPTIONS.find(s => s.value === shape)?.label ?? 'Box';
@@ -134,8 +236,8 @@
 	type SnapDir = 'left' | 'right' | 'front' | 'behind' | 'above';
 
 	function snapItem(targetId: string, direction: SnapDir) {
-		if (!result || !selectedItemId) return;
-		const src = result.placed.find(p => p.item.id === selectedItemId);
+		if (!result || !primarySelectedId) return;
+		const src = result.placed.find(p => p.item.id === primarySelectedId);
 		const tgt = result.placed.find(p => p.item.id === targetId);
 		if (!src || !tgt) return;
 
@@ -169,22 +271,22 @@
 				break;
 		}
 
-		newPos.x = Math.max(0, newPos.x);
-		newPos.y = Math.max(0, newPos.y);
-		newPos.z = Math.max(0, newPos.z);
+		const maxX = currentTrailer.length * 12 - src.rotation.l;
+		const maxY = currentTrailer.height * 12 - src.rotation.h;
+		const maxZ = currentTrailer.width * 12 - src.rotation.w;
+
+		newPos.x = Math.max(0, Math.min(maxX, newPos.x));
+		newPos.y = Math.max(0, Math.min(maxY, newPos.y));
+		newPos.z = Math.max(0, Math.min(maxZ, newPos.z));
 
 		const updated: PackResult = {
 			...result,
 			placed: result.placed.map(p =>
-				p.item.id === selectedItemId ? { ...p, position: newPos } : p
+				p.item.id === primarySelectedId ? { ...p, position: newPos } : p
 			)
 		};
 		packResult.set(updated);
 	}
-
-	const otherPacked = $derived(
-		liveResult?.placed.filter(p => p.item.id !== selectedItemId) ?? []
-	);
 
 	const CU_IN_PER_CU_FT = 1728;
 	const containerCuFt = $derived(currentTrailer.length * currentTrailer.width * currentTrailer.height);
@@ -210,46 +312,150 @@
 		return n >= 10 ? `${Math.round(n)}` : `${Math.round(n * 10) / 10}`;
 	}
 
+	const packedCount = $derived(liveResult?.placed.length ?? 0);
+
+	// Captures initial positions of all selected items at drag-start for group drag
+	const dragInitialPositions = new Map<string, { x: number; y: number; z: number }>();
+
+	function handleDragStart(id: string) {
+		if (!result) return;
+		dragInitialPositions.clear();
+		for (const p of result.placed) {
+			if (selectedItemIds.has(p.item.id)) {
+				dragInitialPositions.set(p.item.id, { ...p.position });
+			}
+		}
+	}
+
 	function moveItem(id: string, position: { x: number; y: number; z: number }) {
 		if (!result) return;
-		const updated: PackResult = {
+
+		// Multi-item drag: apply the same delta to all selected items
+		if (selectedItemIds.size > 1 && selectedItemIds.has(id)) {
+			const primaryInit = dragInitialPositions.get(id);
+			if (primaryInit) {
+				const dx = position.x - primaryInit.x;
+				const dz = position.z - primaryInit.z;
+				const newPlaced = result.placed.map(p => {
+					if (!selectedItemIds.has(p.item.id)) return p;
+					const init = dragInitialPositions.get(p.item.id);
+					if (!init) return p;
+					const maxX = currentTrailer.length * 12 - p.rotation.l;
+					const maxZ = currentTrailer.width * 12 - p.rotation.w;
+					return {
+						...p,
+						position: {
+							x: Math.max(0, Math.min(maxX, init.x + dx)),
+							y: p.position.y,
+							z: Math.max(0, Math.min(maxZ, init.z + dz)),
+						}
+					};
+				});
+				packResult.set({ ...result, placed: newPlaced });
+				return;
+			}
+		}
+
+		// Single item move with collision check
+		const self = result.placed.find(p => p.item.id === id);
+		if (!self) return;
+		if (packedItemCollidesWithAnyPeer(id, position, self.rotation, result.placed)) return;
+		packResult.set({
+			...result,
+			placed: result.placed.map(p => p.item.id === id ? { ...p, position } : p)
+		});
+	}
+
+	/** Stack selected items vertically at the base item's x/z. */
+	function stackItems() {
+		if (!result || selectedItemIds.size < 2) return;
+		const placed = result.placed;
+
+		// stackOrder[0] = top, stackOrder[last] = bottom
+		const order = stackOrder.length === selectedItemIds.size
+			? stackOrder
+			: [...selectedItemIds];
+
+		// Base x/z: use primary item or first in order
+		const baseId = order[order.length - 1] ?? [...selectedItemIds][0];
+		const base = placed.find(p => p.item.id === baseId);
+		if (!base) return;
+
+		const baseX = base.position.x;
+		const baseZ = base.position.z;
+
+		// Stack from floor up: last in order (bottom) → first (top)
+		const bottomToTop = [...order].reverse();
+		let y = 0;
+		const newPositions = new Map<string, { x: number; y: number; z: number }>();
+		for (const sid of bottomToTop) {
+			const p = placed.find(pr => pr.item.id === sid);
+			if (!p) continue;
+			newPositions.set(sid, { x: baseX, y, z: baseZ });
+			y += p.rotation.h;
+		}
+
+		packResult.set({
 			...result,
 			placed: result.placed.map(p =>
-				p.item.id === id ? { ...p, position } : p
+				newPositions.has(p.item.id)
+					? { ...p, position: newPositions.get(p.item.id)! }
+					: p
 			)
-		};
-		packResult.set(updated);
+		});
+	}
+
+	/** Swap two items in stackOrder and re-stack if already stacked. */
+	function reorderStack(fromIdx: number, toIdx: number) {
+		if (fromIdx === toIdx) return;
+		const next = [...stackOrder];
+		const [moved] = next.splice(fromIdx, 1);
+		next.splice(toIdx, 0, moved);
+		stackOrder = next;
+		if (isStacked) stackItems();
 	}
 
 	const NUDGE_SMALL = 1;   // inches
 	const NUDGE_LARGE = 6;
 
 	function nudgeItem(axis: 'x' | 'y' | 'z', delta: number) {
-		if (!result || !selectedItemId) return;
-		const src = result.placed.find(p => p.item.id === selectedItemId);
-		if (!src) return;
+		if (!result || selectedItemIds.size === 0) return;
 
-		const maxX = currentTrailer.length * 12 - src.rotation.l;
-		const maxY = currentTrailer.height * 12 - src.rotation.h;
-		const maxZ = currentTrailer.width * 12 - src.rotation.w;
+		const selected = result.placed.filter(p => selectedItemIds.has(p.item.id));
+		if (selected.length === 0) return;
 
-		const newPos = { ...src.position };
-		newPos[axis] = Math.max(0, Math.min(
-			axis === 'x' ? maxX : axis === 'y' ? maxY : maxZ,
-			newPos[axis] + delta
-		));
+		// Non-selected items to check collisions against
+		const nonSelected = result.placed.filter(p => !selectedItemIds.has(p.item.id));
+		const proposed = new Map<string, { x: number; y: number; z: number }>();
 
-		const updated: PackResult = {
+		for (const src of selected) {
+			const maxX = currentTrailer.length * 12 - src.rotation.l;
+			const maxY = currentTrailer.height * 12 - src.rotation.h;
+			const maxZ = currentTrailer.width * 12 - src.rotation.w;
+
+			const newPos = { ...src.position };
+			newPos[axis] = Math.max(0, Math.min(
+				axis === 'x' ? maxX : axis === 'y' ? maxY : maxZ,
+				newPos[axis] + delta
+			));
+
+			if (packedItemCollidesWithAnyPeer(src.item.id, newPos, src.rotation, nonSelected)) {
+				return; // Abort entire group move if any item would collide
+			}
+			proposed.set(src.item.id, newPos);
+		}
+
+		packResult.set({
 			...result,
-			placed: result.placed.map(p =>
-				p.item.id === selectedItemId ? { ...p, position: newPos } : p
-			)
-		};
-		packResult.set(updated);
+			placed: result.placed.map(p => {
+				const np = proposed.get(p.item.id);
+				return np ? { ...p, position: np } : p;
+			})
+		});
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (!selectedItemId) return;
+		if (selectedItemIds.size === 0) return;
 		const target = e.target as HTMLElement;
 		if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
 
@@ -269,7 +475,12 @@
 				nudgeItem(e.altKey ? 'y' : 'z', e.altKey ? -step : step);
 				break;
 			case 'Escape':
-				selectedItemId = null;
+				if (snapTargetId) {
+					snapTargetId = null;
+				} else {
+					selectedItemIds = new Set();
+					primarySelectedId = null;
+				}
 				break;
 			default:
 				return;
@@ -288,10 +499,36 @@
 	<!-- Left sidebar (desktop) / bottom sheet (mobile) -->
 	<div class="left-panel">
 		<BottomSheet bind:value={sheetState} peekHeight={SHEET_PEEK_H}>
+
+		<!-- Peek summary: packer status pill (mobile only) -->
+		{#if !isDesktop}
+		<div class="peek-pills" role="button" tabindex="0"
+			onclick={() => sheetState = 'full'}
+			onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') sheetState = 'full'; }}
+			aria-label="Expand planner"
+		>
+			<div class="peek-pill peek-pill--packer">
+				<div class="peek-pill-body">
+					<span class="peek-pill-count">{packedCount}/{items.length} packed</span>
+					<div class="peek-progress-bar">
+						<div class="peek-progress-fill" style:width="{volBarPct}%"></div>
+					</div>
+				</div>
+				<div class="peek-pill-icon">
+					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+						<rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+					</svg>
+				</div>
+			</div>
+		</div>
+		{/if}
+
+		{#if isDesktop || sheetState === 'full'}
 		<div class="packer-header">
 			<h1>Pack Planner</h1>
 		</div>
 
+		{#if !primarySelectedId && selectedItemIds.size < 2}
 		<div class="packer-tabs">
 			<button class="packer-tab" class:active={activeTab === 'inventory'} onclick={() => activeTab = 'inventory'}>
 				Inventory
@@ -300,6 +537,7 @@
 				Stats
 			</button>
 		</div>
+		{/if}
 
 		<div class="panel-scroll">
 			{#if activeTab === 'stats'}
@@ -366,7 +604,62 @@
 				</div>
 			{:else}
 
-			{#if selectedPacked}
+			{#if selectedItemIds.size >= 2}
+				<!-- Multi-select card — same container as single-item detail -->
+				<div class="detail-card">
+					<div class="detail-card-header">
+						<span class="multi-select-title">{selectedItemIds.size} items selected</span>
+						<button
+							class="detail-close"
+							onclick={() => { selectedItemIds = new Set(); primarySelectedId = null; }}
+							aria-label="Deselect all"
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+
+					<div class="stack-order-list">
+						{#each stackOrder as id, idx (id)}
+							{@const p = liveResult?.placed.find(pl => pl.item.id === id)}
+							{#if p}
+								<div class="stack-order-row">
+									<div class="stack-order-reorder">
+										<button
+											class="reorder-btn"
+											disabled={idx === 0}
+											onclick={() => reorderStack(idx, idx - 1)}
+											title="Move up"
+										>▲</button>
+										<button
+											class="reorder-btn"
+											disabled={idx === stackOrder.length - 1}
+											onclick={() => reorderStack(idx, idx + 1)}
+											title="Move down"
+										>▼</button>
+									</div>
+									<span class="stack-order-dot" style:background={p.color}></span>
+									<span class="stack-order-name">{p.item.name}</span>
+									<span class="stack-order-badge">
+										{#if idx === 0}top{:else if idx === stackOrder.length - 1}bottom{/if}
+									</span>
+								</div>
+							{/if}
+						{/each}
+					</div>
+
+					<div class="multi-actions">
+						<button class="multi-action-btn primary" onclick={stackItems}>
+							{isStacked ? '↕ Re-stack' : '↕ Stack vertically'}
+						</button>
+					</div>
+
+					<p class="stack-hint">
+						{isStacked
+							? 'Drag to move the group · reorder above to rearrange'
+							: 'Drag any item to move the group · shift-click to add/remove'}
+					</p>
+				</div>
+			{:else if selectedPacked}
 				{@const item = selectedPacked.item}
 				<div class="detail-card">
 					<div class="detail-card-header">
@@ -375,11 +668,11 @@
 							style:background={selectedPacked.color}
 						></div>
 						<h3 class="detail-card-name">{item.name}</h3>
-						<button
-							class="detail-close"
-							onclick={() => selectedItemId = null}
-							aria-label="Close detail"
-						>
+					<button
+						class="detail-close"
+						onclick={() => { selectedItemIds = new Set(); primarySelectedId = null; snapTargetId = null; }}
+						aria-label="Close detail"
+					>
 							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 						</button>
 					</div>
@@ -440,16 +733,16 @@
 						</div>
 					{/if}
 
-					{#if item.notes}
-						<div class="detail-section">
-							<span class="detail-section-label">Notes</span>
-							<p class="detail-notes">{item.notes}</p>
-						</div>
-					{/if}
-				</div>
-			{/if}
+				{#if item.notes}
+					<div class="detail-section">
+						<span class="detail-section-label">Notes</span>
+						<p class="detail-notes">{item.notes}</p>
+					</div>
+				{/if}
+			</div>
+		{/if}
 
-			{#if items.length > 0}
+		{#if items.length > 0 && !primarySelectedId && selectedItemIds.size < 2}
 				<details class="accordion" open>
 					<summary class="accordion-trigger">
 						<span class="section-label">Inventory ({items.length})</span>
@@ -471,16 +764,16 @@
 							{@const unplaced = liveResult?.unplaced.find(u => u.id === item.id)}
 							{@const noDims = item.dimensions.l <= 0 || item.dimensions.w <= 0 || item.dimensions.h <= 0}
 							{@const inTrailer = packedIds.has(item.id)}
-								<div
-									class="item-row"
-									class:packed={!!packed}
-									class:unplaced={!!unplaced || noDims}
-									class:selected={selectedItemId === item.id}
-									role="button"
-									tabindex="0"
-									onclick={() => handleItemClick(item.id)}
-									onkeydown={(e) => { if (e.key === 'Enter') handleItemClick(item.id); }}
-								>
+							<div
+								class="item-row"
+								class:packed={!!packed}
+								class:unplaced={!!unplaced || noDims}
+								class:selected={selectedItemIds.has(item.id)}
+								role="button"
+								tabindex="0"
+								onclick={(e) => handleItemClick(item.id, e.shiftKey)}
+								onkeydown={(e) => { if (e.key === 'Enter') handleItemClick(item.id); }}
+							>
 									<span
 										class="item-dot"
 										style:background={packed?.color ?? ((unplaced || noDims) ? 'var(--color-warning)' : 'var(--color-border)')}
@@ -511,9 +804,10 @@
 						</div>
 					</div>
 				</details>
-			{/if}
-			{/if}
+		{/if}
+		{/if}
 		</div>
+		{/if}
 		</BottomSheet>
 	</div>
 
@@ -574,25 +868,75 @@
 		</div>
 
 		<div class="scene-area">
+			<label class="scene-texture-toggle" title="Maps each item’s photo onto its shape model (couch, chair, box, etc.). Does not replace 3D scans from photos.">
+				<input type="checkbox" bind:checked={wrapPhotoOnShapes} />
+				<span>Photo on shapes</span>
+			</label>
 			<TrailerScene
 				trailer={currentTrailer}
 				packedItems={liveResult?.placed ?? []}
 				loadStep={0}
-				{selectedItemId}
-				onSelectItem={(id) => selectedItemId = id}
+				{selectedItemIds}
+				{snapTargetId}
+				{wrapPhotoOnShapes}
+				onSelectItem={handleSelect}
+				onClickEmpty={() => { selectedItemIds = new Set(); primarySelectedId = null; snapTargetId = null; }}
+				onDragStart={handleDragStart}
 				onMoveItem={moveItem}
 			/>
 		</div>
 
 		<!-- Mobile detail drawer -->
-		{#if selectedPacked}
+		{#if selectedItemIds.size >= 2}
+			<div class="mobile-detail">
+				<div class="detail-card">
+					<div class="detail-card-header">
+						<span class="multi-select-title">{selectedItemIds.size} items selected</span>
+						<button class="detail-close" onclick={() => { selectedItemIds = new Set(); primarySelectedId = null; }} aria-label="Deselect all">
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+						</button>
+					</div>
+
+					<div class="stack-order-list">
+						{#each stackOrder as id, idx (id)}
+							{@const p = liveResult?.placed.find(pl => pl.item.id === id)}
+							{#if p}
+								<div class="stack-order-row">
+									<div class="stack-order-reorder">
+										<button class="reorder-btn" disabled={idx === 0} onclick={() => reorderStack(idx, idx - 1)} title="Move up">▲</button>
+										<button class="reorder-btn" disabled={idx === stackOrder.length - 1} onclick={() => reorderStack(idx, idx + 1)} title="Move down">▼</button>
+									</div>
+									<span class="stack-order-dot" style:background={p.color}></span>
+									<span class="stack-order-name">{p.item.name}</span>
+									<span class="stack-order-badge">
+										{#if idx === 0}top{:else if idx === stackOrder.length - 1}bottom{/if}
+									</span>
+								</div>
+							{/if}
+						{/each}
+					</div>
+
+					<div class="multi-actions">
+						<button class="multi-action-btn primary" onclick={stackItems}>
+							{isStacked ? '↕ Re-stack' : '↕ Stack vertically'}
+						</button>
+					</div>
+
+					<p class="stack-hint">
+						{isStacked
+							? 'Drag to move the group · reorder above to rearrange'
+							: 'Drag any item to move the group · shift-click to add/remove'}
+					</p>
+				</div>
+			</div>
+		{:else if selectedPacked}
 			{@const item = selectedPacked.item}
 			<div class="mobile-detail">
 				<div class="detail-card">
 					<div class="detail-card-header">
 						<div class="detail-color-dot" style:background={selectedPacked.color}></div>
 						<h3 class="detail-card-name">{item.name}</h3>
-						<button class="detail-close" onclick={() => selectedItemId = null} aria-label="Close detail">
+						<button class="detail-close" onclick={() => { selectedItemIds = new Set(); primarySelectedId = null; }} aria-label="Close detail">
 							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 						</button>
 					</div>
@@ -653,48 +997,73 @@
 						</div>
 					{/if}
 
-					{#if item.notes}
-						<div class="detail-section">
-							<span class="detail-section-label">Notes</span>
-							<p class="detail-notes">{item.notes}</p>
-						</div>
-					{/if}
+			{#if item.notes}
+				<div class="detail-section">
+					<span class="detail-section-label">Notes</span>
+					<p class="detail-notes">{item.notes}</p>
 				</div>
+			{/if}
 			</div>
-		{/if}
+		</div>
+	{/if}
 
-		<!-- Floating snap controls — bottom-right of scene -->
-		{#if selectedPacked && otherPacked.length > 0}
-			<div class="snap-float">
-				<span class="snap-float-label">Move <strong>{selectedPacked.item.name}</strong> next to</span>
-				<div class="snap-targets">
-					{#each otherPacked as target (target.item.id)}
-						<div class="snap-target">
-							<span class="snap-target-name" style:border-left="3px solid {target.color}">
-								{target.item.name}
-							</span>
-							<div class="snap-btns">
-								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'left')} title="Left of">
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-								</button>
-								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'right')} title="Right of">
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-								</button>
-								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'behind')} title="Behind">
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
-								</button>
-								<button class="snap-btn" onclick={() => snapItem(target.item.id, 'front')} title="In front">
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-								</button>
-								<button class="snap-btn snap-above" onclick={() => snapItem(target.item.id, 'above')} title="On top">
-									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-								</button>
-							</div>
-						</div>
-					{/each}
+	<!-- Floating move/snap controls — bottom-right of scene -->
+	{#if selectedPacked && selectedItemIds.size === 1}
+		<div class="move-float">
+			{#if snapTargetPacked}
+				<div class="snap-to-header">
+					<span class="snap-to-label">Place next to</span>
+					<span class="snap-to-target" style:border-left="3px solid {snapTargetPacked.color}">
+						{snapTargetPacked.item.name}
+					</span>
+					<button class="snap-to-clear" onclick={() => snapTargetId = null} aria-label="Exit snap mode">
+						<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+					</button>
 				</div>
-			</div>
-		{/if}
+				<div class="snap-directions">
+					<button class="snap-dir-btn" onclick={() => snapItem(snapTargetId!, 'left')} title="Left of">
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+						Left
+					</button>
+					<button class="snap-dir-btn" onclick={() => snapItem(snapTargetId!, 'right')} title="Right of">
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+						Right
+					</button>
+					<button class="snap-dir-btn" onclick={() => snapItem(snapTargetId!, 'behind')} title="Behind">
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+						Behind
+					</button>
+					<button class="snap-dir-btn" onclick={() => snapItem(snapTargetId!, 'front')} title="In front">
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+						Front
+					</button>
+					<button class="snap-dir-btn snap-dir-above" onclick={() => snapItem(snapTargetId!, 'above')} title="Stack on top">
+						<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+						Above
+					</button>
+				</div>
+			{:else}
+				<div class="nudge-grid">
+					<button class="nudge-btn" onclick={() => nudgeItem('z', -NUDGE_LARGE)} title="Forward (↑)">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+					</button>
+					<button class="nudge-btn nudge-btn--up" onclick={() => nudgeItem('y', NUDGE_LARGE)} title="Up (Alt+↑)">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+					</button>
+					<button class="nudge-btn" onclick={() => nudgeItem('x', -NUDGE_LARGE)} title="Left (←)">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+					</button>
+					<button class="nudge-btn nudge-btn--center" onclick={() => nudgeItem('z', NUDGE_LARGE)} title="Back (↓)">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+					</button>
+					<button class="nudge-btn" onclick={() => nudgeItem('x', NUDGE_LARGE)} title="Right (→)">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+					</button>
+				</div>
+				<p class="nudge-hint">Click another item to snap</p>
+			{/if}
+		</div>
+	{/if}
 	</div>
 </div>
 
@@ -719,6 +1088,56 @@
 		overflow-y: auto;
 		-webkit-overflow-scrolling: touch;
 		overscroll-behavior: contain;
+	}
+
+	/* ── Peek-state packer pill ────────────────────────────────────── */
+	.peek-pills {
+		display: flex;
+		padding: 2px 14px 6px;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.peek-pill {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.peek-pill-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.peek-pill-count {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
+	.peek-progress-bar {
+		height: 4px;
+		background: var(--color-border-subtle);
+		border-radius: 100px;
+		overflow: hidden;
+	}
+
+	.peek-progress-fill {
+		height: 100%;
+		background: var(--color-accent);
+		border-radius: 100px;
+		transition: width 0.3s ease;
+	}
+
+	.peek-pill-icon {
+		flex-shrink: 0;
+		color: var(--color-text-muted);
+		opacity: 0.7;
 	}
 
 	.packer-header {
@@ -778,7 +1197,37 @@
 		flex: 1;
 		min-height: 250px;
 		position: relative;
-		background: #0a0a0a;
+		background: var(--color-bg);
+	}
+
+	.scene-texture-toggle {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 10px;
+		border-radius: 8px;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+		font-size: 12px;
+		cursor: pointer;
+		user-select: none;
+		backdrop-filter: blur(8px);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.scene-texture-toggle:hover {
+		color: var(--color-text-primary);
+		border-color: var(--color-border-subtle);
+	}
+
+	.scene-texture-toggle input {
+		margin: 0;
+		accent-color: var(--color-accent, #e20074);
 	}
 
 
@@ -949,12 +1398,12 @@
 		font-size: 13px;
 		font-weight: 600;
 		color: var(--color-text-primary);
-		background: rgba(28, 28, 33, 0.88);
+		background: var(--color-bg-elevated);
 		border: none;
 		border-radius: var(--radius-pill);
 		box-shadow:
-			0 0 0 1px var(--color-border-subtle),
-			0 4px 16px rgba(0, 0, 0, 0.35);
+			0 0 0 1px var(--color-border),
+			var(--shadow-md);
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
 		cursor: pointer;
@@ -962,7 +1411,7 @@
 	}
 
 	.trailer-float-btn:hover {
-		background: rgba(38, 38, 43, 0.92);
+		background: var(--color-bg-card);
 	}
 
 	.trailer-float-chevron {
@@ -994,12 +1443,12 @@
 		flex-direction: column;
 		gap: 2px;
 		padding: 6px;
-		background: rgba(28, 28, 33, 0.94);
+		background: var(--color-bg-elevated);
 		border: none;
 		border-radius: var(--radius-lg);
 		box-shadow:
-			0 0 0 1px var(--color-border-subtle),
-			0 12px 40px rgba(0, 0, 0, 0.5);
+			0 0 0 1px var(--color-border),
+			var(--shadow-lg);
 		backdrop-filter: blur(20px);
 		-webkit-backdrop-filter: blur(20px);
 	}
@@ -1021,11 +1470,11 @@
 	}
 
 	.trailer-option:hover {
-		background: rgba(255, 255, 255, 0.06);
+		background: var(--color-bg-card);
 	}
 
 	.trailer-option.active {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--color-accent-soft);
 	}
 
 	.trailer-option-name {
@@ -1230,93 +1679,154 @@
 		margin: 0;
 	}
 
-	/* Floating snap panel */
-	.snap-float {
+	/* Inline nudge controls (default single-item state) */
+	/* ── Floating move/snap panel — bottom-right of scene ── */
+	.move-float {
 		position: absolute;
 		bottom: 12px;
 		right: 12px;
-		max-width: 340px;
-		max-height: 50%;
-		overflow-y: auto;
-		padding: 12px 14px;
-		background: rgba(28, 28, 33, 0.92);
-		border: none;
-		border-radius: var(--radius-lg);
-		box-shadow:
-			0 0 0 1px var(--color-border-subtle),
-			0 16px 48px rgba(0, 0, 0, 0.45);
-		backdrop-filter: blur(16px);
-		-webkit-backdrop-filter: blur(16px);
-		z-index: 10;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		align-items: center;
+		gap: 6px;
+		padding: 10px 12px;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border-subtle);
+		border-radius: var(--radius-lg);
+		box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);
+		z-index: 10;
 	}
 
-	.snap-float-label {
-		font-size: 11px;
+	.nudge-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 34px);
+		grid-template-rows: repeat(2, 34px);
+		gap: 3px;
+	}
+
+	.nudge-btn {
+		width: 34px;
+		height: 34px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-elevated);
 		color: var(--color-text-secondary);
-		font-weight: 500;
+		transition: all 0.12s;
 	}
 
-	.snap-float-label strong {
+	.nudge-btn:hover {
+		background: var(--color-bg-card);
+		border-color: var(--color-border-strong);
 		color: var(--color-text);
 	}
 
-	.snap-targets {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
+	.nudge-btn:active {
+		background: var(--color-accent-soft);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
 	}
 
-	.snap-target {
+	/* The "up" button sits in the top-right of the 3×2 grid */
+	.nudge-btn--up {
+		grid-column: 3;
+		grid-row: 1;
+		color: var(--color-text-muted);
+		border-style: dashed;
+	}
+
+	/* Back/down is the center of row 2 */
+	.nudge-btn--center {
+		grid-column: 2;
+		grid-row: 2;
+	}
+
+	.nudge-hint {
+		font-size: 10px;
+		color: var(--color-text-muted);
+		text-align: center;
+	}
+
+	.snap-to-header {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 5px 8px;
-		background: rgba(255, 255, 255, 0.04);
-		border-radius: var(--radius-sm);
+		gap: 6px;
 	}
 
-	.snap-target-name {
+	.snap-to-label {
+		font-size: 10px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+		flex-shrink: 0;
+	}
+
+	.snap-to-target {
 		flex: 1;
 		font-size: 12px;
 		font-weight: 500;
+		color: var(--color-text);
 		padding-left: 8px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.snap-btns {
-		display: flex;
-		gap: 2px;
-		flex-shrink: 0;
-	}
-
-	.snap-btn {
-		width: 28px;
-		height: 28px;
+	.snap-to-clear {
+		width: 22px;
+		height: 22px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		border-radius: 4px;
 		color: var(--color-text-muted);
-		transition: all 0.15s;
+		flex-shrink: 0;
+		transition: all 0.12s;
 	}
 
-	.snap-btn:hover {
-		background: rgba(255, 255, 255, 0.08);
+	.snap-to-clear:hover {
+		background: var(--color-bg-elevated);
 		color: var(--color-text);
 	}
 
-	.snap-btn:active {
+	.snap-directions {
+		display: flex;
+		gap: 4px;
+		flex-wrap: wrap;
+	}
+
+	.snap-dir-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 5px 9px;
+		font-size: 11px;
+		font-weight: 500;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: var(--color-bg-elevated);
+		color: var(--color-text-secondary);
+		transition: all 0.12s;
+		white-space: nowrap;
+	}
+
+	.snap-dir-btn:hover {
+		background: var(--color-bg-card);
+		border-color: var(--color-border-strong);
+		color: var(--color-text);
+	}
+
+	.snap-dir-btn:active {
 		background: var(--color-accent-soft);
+		border-color: var(--color-accent);
 		color: var(--color-accent);
 	}
 
-	.snap-btn.snap-above {
-		color: var(--color-text-secondary);
+	.snap-dir-btn.snap-dir-above {
+		border-style: dashed;
 	}
 
 	/* Inventory sidebar list */
@@ -1514,9 +2024,105 @@
 			-webkit-overflow-scrolling: touch;
 		}
 
-		.right-panel {
-			flex: 1;
-			min-width: 0;
-		}
+	.right-panel {
+		flex: 1;
+		min-width: 0;
 	}
+}
+
+/* ---- Multi-select / stack — shared title inside detail-card ---- */
+.multi-select-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--color-text-primary);
+	flex: 1;
+}
+
+.stack-order-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.stack-order-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 6px;
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-card);
+}
+
+.stack-order-reorder {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.reorder-btn {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 9px;
+	line-height: 1.1;
+	color: var(--color-text-muted);
+	padding: 1px 3px;
+	border-radius: 3px;
+}
+.reorder-btn:hover:not(:disabled) { color: var(--color-text-primary); background: var(--color-bg-elevated); }
+.reorder-btn:disabled { opacity: 0.25; cursor: default; }
+
+.stack-order-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.stack-order-name {
+	flex: 1;
+	font-size: 12px;
+	color: var(--color-text-primary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stack-order-badge {
+	font-size: 10px;
+	color: var(--color-text-muted);
+	font-weight: 500;
+	min-width: 36px;
+	text-align: right;
+}
+
+.multi-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.multi-action-btn {
+	flex: 1;
+	padding: 7px 10px;
+	border: none;
+	border-radius: var(--radius-sm);
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+.multi-action-btn.primary {
+	background: var(--color-accent);
+	color: #fff;
+}
+.multi-action-btn.primary:hover {
+	opacity: 0.85;
+}
+
+.stack-hint {
+	font-size: 11px;
+	color: var(--color-text-muted);
+	margin: 0;
+	line-height: 1.4;
+}
 </style>

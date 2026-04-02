@@ -355,9 +355,9 @@ export const SHAPE_OPTIONS: { value: ItemShape; label: string; icon: string }[] 
 
 export const CATEGORY_DEFAULT_SHAPE: Record<string, ItemShape> = {
 	box: 'box',
+	bin: 'bin',
 	furniture: 'couch',
 	appliance: 'appliance-tall',
-	fragile: 'box',
 	oddShape: 'generic',
 	other: 'generic'
 };

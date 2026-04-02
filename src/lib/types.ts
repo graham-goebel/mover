@@ -1,4 +1,4 @@
-export type ItemCategory = 'box' | 'furniture' | 'appliance' | 'fragile' | 'oddShape' | 'other';
+export type ItemCategory = 'box' | 'bin' | 'furniture' | 'appliance' | 'oddShape' | 'other';
 
 export type ItemShape =
 	| 'box'

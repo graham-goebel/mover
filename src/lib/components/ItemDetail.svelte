@@ -4,6 +4,7 @@
 	import { volumeCuFt } from '$lib/utils/measurement';
 	import { untrack } from 'svelte';
 	import { SHAPE_OPTIONS, CATEGORY_DEFAULT_SHAPE } from '$lib/utils/shapes';
+	import ShapePicker from './ShapePicker.svelte';
 	import ContentsEditor from './ContentsEditor.svelte';
 	import type { RoomPresetId } from '$lib/utils/rooms';
 	import { roomFromPresetAndCustom, splitStoredRoom } from '$lib/utils/rooms';
@@ -56,9 +57,9 @@
 
 	const categories: { value: ItemCategory; label: string; icon: string }[] = [
 		{ value: 'box', label: 'Box', icon: '📦' },
+		{ value: 'bin', label: 'Bin', icon: '🗑️' },
 		{ value: 'furniture', label: 'Furniture', icon: '🪑' },
 		{ value: 'appliance', label: 'Appliance', icon: '🔌' },
-		{ value: 'fragile', label: 'Fragile', icon: '⚠️' },
 		{ value: 'oddShape', label: 'Odd Shape', icon: '🔷' },
 		{ value: 'other', label: 'Other', icon: '📋' }
 	];
@@ -159,14 +160,10 @@
 				<input id="item-weight" type="number" bind:value={weight} min="0" step="1" inputmode="numeric" />
 			</div>
 
-			<div class="field">
-				<label class="field-label" for="detail-item-shape">3D Shape</label>
-				<select id="detail-item-shape" class="shape-select" bind:value={shape}>
-					{#each SHAPE_OPTIONS as s}
-						<option value={s.value}>{s.icon} {s.label}</option>
-					{/each}
-				</select>
-			</div>
+		<div class="field">
+			<label class="field-label" for="detail-item-shape">3D Shape</label>
+			<ShapePicker bind:value={shape} id="detail-item-shape" />
+		</div>
 
 			<ItemFlagsDropdown
 				bind:forSale
@@ -346,12 +343,6 @@
 	.cat-label {
 		font-size: 12px;
 		font-weight: 500;
-	}
-
-	.shape-select {
-		width: 100%;
-		cursor: pointer;
-		color-scheme: dark;
 	}
 
 	textarea {
